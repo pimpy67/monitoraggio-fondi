@@ -71,7 +71,7 @@ def main():
         print(f"\n[{idx+1}/{len(df)}] Processing {isin} - {str(nome)[:40]}...")
 
         try:
-            hist_df = fetcher.get_historical_nav(isin, days=60)
+            hist_df = fetcher.get_historical_nav(isin, days=210)
         except Exception as e:
             print(f"  Errore fetch storico per {isin}: {e}")
             hist_df = pd.DataFrame()
@@ -94,8 +94,8 @@ def main():
         except Exception:
             pass
 
-        # Take last 50 days
-        recent = hist_df.tail(50)
+        # Take last 200 days
+        recent = hist_df.tail(200)
 
         records = []
         for _, r in recent.iterrows():

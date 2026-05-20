@@ -6,7 +6,7 @@ Legge dati direttamente da PostgreSQL (persistente).
 Include auto-recovery: se il monitoraggio non ha girato oggi, lo lancia automaticamente.
 """
 
-from flask import Flask, send_file, send_from_directory, jsonify, request
+from flask import Flask, send_file, send_from_directory, jsonify, request, make_response
 import os
 import json
 import threading
@@ -23,8 +23,11 @@ db = PriceDatabase()
 
 @app.route('/')
 def index():
-    """Serve la dashboard principale"""
-    return send_file('dashboard.html')
+    """Serve la dashboard principale (no cache — aggiornamenti sempre freschi)"""
+    resp = make_response(send_file('dashboard.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
 
 @app.route('/data/<path:filename>')
 def serve_data(filename):
@@ -444,6 +447,508 @@ def test_fund():
         result['traceback'] = traceback.format_exc()
 
     return jsonify(result)
+
+
+@app.route('/api/portfolio', methods=['GET'])
+def get_portfolio():
+    """Restituisce tutti i fondi nel portafoglio personale, arricchiti con dati attuali."""
+    entries = db.get_portfolio_entries()
+
+    # Carica dati di analisi correnti dal JSON per arricchire il portafoglio
+    fund_analysis = {}
+    try:
+        with open('data/dashboard_data.json', 'r') as f:
+            dash = json.load(f)
+        for level_key, level_funds in dash.get('levels', {}).items():
+            for fund in level_funds:
+                isin = fund.get('isin') or fund.get('ISIN') or ''
+                if isin:
+                    fund_analysis[isin] = {**fund, 'livello': int(level_key)}
+        for fund in dash.get('l0_funds', []):
+            isin = fund.get('isin') or ''
+            if isin:
+                fund_analysis[isin] = {**fund, 'livello': 0}
+    except Exception:
+        pass
+
+    result = []
+    for entry in entries:
+        isin = entry['isin']
+        analysis = fund_analysis.get(isin, {})
+
+        # Recupera l'ultimo NAV dalla price_history
+        prices_df = db.get_prices(isin, days=5)
+        current_nav = None
+        if not prices_df.empty:
+            current_nav = float(prices_df.iloc[-1]['price'])
+
+        perf_pct = None
+        if current_nav and entry['entry_price'] and float(entry['entry_price']) > 0:
+            perf_pct = round((current_nav - float(entry['entry_price'])) / float(entry['entry_price']) * 100, 2)
+
+        result.append({
+            'isin': isin,
+            'fund_name': entry['fund_name'],
+            'entry_date': entry['entry_date'],
+            'entry_price': entry['entry_price'],
+            'current_nav': current_nav,
+            'perf_pct': perf_pct,
+            'level': analysis.get('livello') or analysis.get('level'),
+            'signal': analysis.get('segnale') or analysis.get('signal'),
+            'rsi': analysis.get('rsi14') or analysis.get('rsi'),
+            'mm20': analysis.get('mm20') or analysis.get('sma20'),
+            'dist_mm20': analysis.get('distanza_mm20') or analysis.get('dist_sma20_pct'),
+            'adx': analysis.get('adx14') or analysis.get('adx'),
+            'asset_type': analysis.get('asset_type', ''),
+        })
+
+    return jsonify({'portfolio': result, 'count': len(result)})
+
+
+@app.route('/api/portfolio', methods=['POST'])
+def add_to_portfolio():
+    """Aggiunge un fondo al portafoglio personale."""
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Dati mancanti'}), 400
+
+    isin = data.get('isin', '').strip().upper()
+    entry_date = data.get('entry_date', '')
+    entry_price = data.get('entry_price')
+    fund_name = data.get('fund_name', '').strip()
+
+    if not isin or not entry_date or entry_price is None:
+        return jsonify({'error': 'isin, entry_date e entry_price sono obbligatori'}), 400
+
+    try:
+        entry_price = float(entry_price)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'entry_price deve essere un numero'}), 400
+
+    ok = db.add_portfolio_entry(isin, entry_date, entry_price, fund_name)
+    if ok:
+        return jsonify({'status': 'ok', 'isin': isin, 'message': 'Fondo aggiunto al portafoglio'})
+    else:
+        return jsonify({'error': 'Errore salvataggio - database non disponibile'}), 503
+
+
+@app.route('/api/portfolio/<isin>', methods=['DELETE'])
+def remove_from_portfolio(isin):
+    """Rimuove un fondo dal portafoglio personale."""
+    isin = isin.strip().upper()
+    ok = db.remove_portfolio_entry(isin)
+    if ok:
+        return jsonify({'status': 'ok', 'isin': isin, 'message': 'Fondo rimosso dal portafoglio'})
+    else:
+        return jsonify({'error': 'Errore rimozione - database non disponibile'}), 503
+
+
+@app.route('/api/l1-tracking')
+def l1_tracking_api():
+    """Restituisce i fondi attualmente in L1 con dati di ingresso e performance."""
+    import numpy as np
+    from datetime import date as date_type
+
+    entries = db.get_all_l1_entries()   # {isin: {entry_date, entry_price}}
+    today = date_type.today()
+    today_str = today.isoformat()
+
+    # Carica nomi fondi dal JSON
+    fund_names = {}
+    try:
+        with open('data/dashboard_data.json', 'r') as f:
+            dash = json.load(f)
+        for lv_funds in dash.get('levels', {}).values():
+            for fund in lv_funds:
+                isin = fund.get('isin') or ''
+                if isin:
+                    fund_names[isin] = fund.get('nome', isin)
+    except Exception:
+        pass
+
+    result = []
+    for isin, entry in entries.items():
+        entry_date = entry['entry_date']
+        entry_price = entry['entry_price']
+
+        ed = entry_date if isinstance(entry_date, date_type) else date_type.fromisoformat(str(entry_date))
+        try:
+            days_in_l1 = max(1, int(np.busday_count(ed, today)) + 1)
+        except Exception:
+            days_in_l1 = 1
+
+        prices_df = db.get_prices(isin, days=3)
+        current_nav = float(prices_df.iloc[-1]['price']) if not prices_df.empty else None
+
+        pct_gain = None
+        if current_nav and entry_price:
+            pct_gain = round((current_nav - float(entry_price)) / float(entry_price) * 100, 2)
+
+        entry_date_str = ed.isoformat()
+        delta_calendar = (today - ed).days
+
+        result.append({
+            'isin': isin,
+            'fund_name': fund_names.get(isin, isin),
+            'entry_date': entry_date_str,
+            'entry_price': float(entry_price),
+            'current_nav': current_nav,
+            'pct_gain': pct_gain,
+            'days_in_l1': days_in_l1,
+            'is_new': delta_calendar <= 1,   # badge NUOVO per giorni 1 e 2
+        })
+
+    return jsonify({'tracking': result})
+
+
+@app.route('/api/l1-exits')
+def l1_exits_api():
+    """Restituisce le uscite da L1 degli ultimi 30 giorni."""
+    days = int(request.args.get('days', 30))
+    exits = db.get_l1_exits(days=days)
+    result = []
+    for e in exits:
+        result.append({
+            'isin': e['isin'],
+            'fund_name': e['fund_name'] or e['isin'],
+            'exit_date': str(e['exit_date']),
+            'exit_price': float(e['exit_price']) if e['exit_price'] else None,
+            'exit_rule': e['exit_rule'],
+            'exit_trigger': e['exit_trigger'] or '',
+            'entry_date': str(e['entry_date']) if e['entry_date'] else None,
+            'entry_price': float(e['entry_price']) if e['entry_price'] else None,
+            'days_in_l1': e['days_in_l1'],
+            'pct_gain': float(e['pct_gain']) if e['pct_gain'] is not None else None,
+        })
+    return jsonify({'exits': result, 'count': len(result)})
+
+
+@app.route('/api/portfolio-history/<isin>')
+def portfolio_history(isin):
+    """
+    Restituisce lo storico 30gg con indicatori calcolati per un fondo del portafoglio.
+    Indicatori: NAV, %1G, %1W, MM5, MM20, RSI14, Dist%MM20
+    """
+    import pandas as pd
+
+    isin = isin.strip().upper()
+    days_history = int(request.args.get('days', 30))
+
+    # Recupera 60+ giorni per avere abbastanza dati per SMA20 e RSI14
+    df = db.get_prices(isin, days=days_history + 40)
+
+    if df.empty or len(df) < 2:
+        return jsonify({'isin': isin, 'history': [], 'error': 'Dati storici insufficienti'})
+
+    df = df.sort_values('date').reset_index(drop=True)
+    prices = df['price'].astype(float)
+
+    # SMA5 e SMA20
+    df['mm5'] = prices.rolling(window=5, min_periods=1).mean()
+    df['mm20'] = prices.rolling(window=20, min_periods=1).mean()
+
+    # Distanza % da MM20
+    df['dist_mm20'] = (prices - df['mm20']) / df['mm20'] * 100
+
+    # RSI14
+    def calc_rsi(series, period=14):
+        delta = series.diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+        avg_gain = gain.ewm(com=period - 1, min_periods=period).mean()
+        avg_loss = loss.ewm(com=period - 1, min_periods=period).mean()
+        rs = avg_gain / avg_loss.replace(0, float('nan'))
+        return 100 - (100 / (1 + rs))
+
+    df['rsi14'] = calc_rsi(prices)
+
+    # %1G (variazione % giornaliera)
+    df['pct_1g'] = prices.pct_change() * 100
+
+    # %1W (variazione % settimanale, 5 giorni di borsa)
+    df['pct_1w'] = prices.pct_change(periods=5) * 100
+
+    # Restituisce solo gli ultimi days_history giorni
+    df_out = df.tail(days_history).copy()
+
+    history = []
+    for _, row in df_out.iterrows():
+        def fmt(v, decimals=2):
+            return round(float(v), decimals) if pd.notna(v) else None
+
+        history.append({
+            'date': str(row['date'].date()) if hasattr(row['date'], 'date') else str(row['date'])[:10],
+            'nav': fmt(row['price'], 4),
+            'pct_1g': fmt(row['pct_1g']),
+            'pct_1w': fmt(row['pct_1w']),
+            'mm5': fmt(row['mm5'], 4),
+            'mm20': fmt(row['mm20'], 4),
+            'dist_mm20': fmt(row['dist_mm20']),
+            'rsi14': fmt(row['rsi14']),
+        })
+
+    return jsonify({'isin': isin, 'history': history, 'count': len(history)})
+
+
+@app.route('/api/fund-detail/<isin>')
+def fund_detail(isin):
+    """Storico completo + tutti gli indicatori + sentiment breve/medio/lungo per un fondo."""
+    import pandas as pd
+    import math
+    from technical_analysis import TechnicalAnalyzer
+
+    isin = isin.strip().upper()
+    days_req = int(request.args.get('days', 60))
+
+    df = db.get_prices(isin, days=max(days_req + 110, 270))
+    if df.empty or len(df) < 2:
+        return jsonify({'isin': isin, 'error': 'Dati storici insufficienti'})
+
+    df = df.sort_values('date').reset_index(drop=True)
+    prices = df['price'].astype(float)
+
+    fund_info = {}
+    try:
+        with open('data/dashboard_data.json', 'r') as f:
+            dash = json.load(f)
+        for level_key, level_funds in dash.get('levels', {}).items():
+            for fund in level_funds:
+                if (fund.get('isin') or fund.get('ISIN') or '') == isin:
+                    fund_info = {**fund, 'livello': int(level_key)}
+                    break
+            if fund_info:
+                break
+        if not fund_info:
+            for fund in dash.get('l0_funds', []):
+                if (fund.get('isin') or '') == isin:
+                    fund_info = {**fund, 'livello': 0}
+                    break
+    except Exception:
+        pass
+
+    asset_type = fund_info.get('asset_type') or TechnicalAnalyzer.detect_asset_type(fund_info.get('categoria', ''))
+    analyzer = TechnicalAnalyzer(asset_type=asset_type)
+
+    ma5  = prices.rolling(window=5,  min_periods=1).mean()
+    ma20 = prices.rolling(window=20, min_periods=1).mean()
+    ma50 = prices.rolling(window=50, min_periods=1).mean()
+
+    delta = prices.diff()
+    gain = delta.clip(lower=0)
+    loss = (-delta).clip(lower=0)
+    avg_gain = gain.ewm(com=13, min_periods=14).mean()
+    avg_loss = loss.ewm(com=13, min_periods=14).mean()
+    rsi14 = 100 - (100 / (1 + avg_gain / avg_loss.replace(0, float('nan'))))
+
+    adx_s = analyzer.calculate_adx(prices)
+    ema12 = prices.ewm(span=12).mean()
+    ema26 = prices.ewm(span=26).mean()
+    macd_line   = ema12 - ema26
+    macd_signal = macd_line.ewm(span=9).mean()
+    macd_hist   = macd_line - macd_signal
+    bb = analyzer.calculate_bollinger_bands(prices)
+
+    df['mm5']         = ma5
+    df['mm20']        = ma20
+    df['mm50']        = ma50
+    df['rsi14']       = rsi14
+    df['adx']         = adx_s
+    df['macd_hist']   = macd_hist
+    df['bb_upper']    = bb['upper']
+    df['bb_lower']    = bb['lower']
+    df['dist_mm20']   = (prices - ma20) / ma20 * 100
+    df['pct_1g']      = prices.pct_change() * 100
+    df['pct_1w']      = prices.pct_change(periods=5) * 100
+    df['pct_1m']      = prices.pct_change(periods=22) * 100
+
+    def fmt(v, d=2):
+        try:
+            f = float(v)
+            return None if math.isnan(f) or math.isinf(f) else round(f, d)
+        except Exception:
+            return None
+
+    df_out = df.tail(days_req).copy()
+    history = []
+    for _, row in df_out.iterrows():
+        history.append({
+            'date':       str(row['date'].date()) if hasattr(row['date'], 'date') else str(row['date'])[:10],
+            'nav':        fmt(row['price'], 4),
+            'pct_1g':     fmt(row['pct_1g']),
+            'pct_1w':     fmt(row['pct_1w']),
+            'pct_1m':     fmt(row['pct_1m']),
+            'mm5':        fmt(row['mm5'], 4),
+            'mm20':       fmt(row['mm20'], 4),
+            'mm50':       fmt(row['mm50'], 4) if len(prices) >= 50 else None,
+            'dist_mm20':  fmt(row['dist_mm20']),
+            'rsi14':      fmt(row['rsi14'], 1),
+            'adx':        fmt(row['adx'], 1),
+            'macd_hist':  fmt(row['macd_hist'], 4),
+            'bb_upper':   fmt(row['bb_upper'], 4),
+            'bb_lower':   fmt(row['bb_lower'], 4),
+        })
+
+    # ── Sentiment ─────────────────────────────────────────────────────────────
+    last = history[-1] if history else {}
+    rsi   = last.get('rsi14') or 50.0
+    adx_v = last.get('adx')   or 0.0
+    mh    = last.get('macd_hist') or 0.0
+    dist  = last.get('dist_mm20') or 0.0
+    pct1w = last.get('pct_1w') or 0.0
+    pct1m = last.get('pct_1m') or 0.0
+    nav_v = last.get('nav')  or 0.0
+    mm20_v= last.get('mm20') or 0.0
+    mm50_v= last.get('mm50') or 0.0
+
+    max_52w   = float(prices.tail(252).max()) if len(prices) >= 252 else float(prices.max())
+    dist_52w  = round((nav_v - max_52w) / max_52w * 100, 2) if max_52w else 0.0
+
+    def verdict(score):
+        if score >= 2:  return 'COMPRA'
+        if score <= -2: return 'VENDI'
+        return 'MANTIENI'
+
+    def vcolor(v):
+        return 'green' if v == 'COMPRA' else 'red' if v == 'VENDI' else 'yellow'
+
+    # Breve termine
+    ss, sf = 0, []
+    if rsi < 35:   ss += 2; sf.append(f'RSI {rsi:.0f} — ipervenduto, possibile rimbalzo')
+    elif rsi < 45: ss += 1; sf.append(f'RSI {rsi:.0f} — debolezza, attenzione')
+    elif rsi > 75: ss -= 2; sf.append(f'RSI {rsi:.0f} — ipercomprato, rischio correzione')
+    elif rsi > 65: ss -= 1; sf.append(f'RSI {rsi:.0f} — zona calda')
+    else:                    sf.append(f'RSI {rsi:.0f} — zona neutrale')
+    if mh > 0:   ss += 1; sf.append('MACD istogramma positivo — momentum rialzista')
+    elif mh < 0: ss -= 1; sf.append('MACD istogramma negativo — momentum ribassista')
+    if pct1w > 1:    ss += 1; sf.append(f'%1W +{pct1w:.1f}% — settimana positiva')
+    elif pct1w < -1: ss -= 1; sf.append(f'%1W {pct1w:.1f}% — settimana negativa')
+
+    # Medio termine
+    ms, mf = 0, []
+    if mm20_v and nav_v:
+        if nav_v > mm20_v: ms += 1; mf.append(f'NAV sopra MM20 ({dist:+.1f}%)')
+        else:              ms -= 1; mf.append(f'NAV sotto MM20 ({dist:+.1f}%)')
+    if adx_v > 25:   ms += 1; mf.append(f'ADX {adx_v:.0f} — trend strutturato')
+    elif adx_v < 15:          mf.append(f'ADX {adx_v:.0f} — mercato laterale')
+    if pct1m > 3:    ms += 1; mf.append(f'%1M +{pct1m:.1f}% — trend mensile positivo')
+    elif pct1m < -3: ms -= 1; mf.append(f'%1M {pct1m:.1f}% — trend mensile negativo')
+    if 45 <= rsi <= 65: ms += 1; mf.append(f'RSI {rsi:.0f} in zona di salute (45–65)')
+
+    # Lungo termine
+    ls, lf = 0, []
+    if mm50_v and nav_v:
+        if nav_v > mm50_v: ls += 1; lf.append('NAV sopra MM50 — trend a lungo positivo')
+        else:              ls -= 1; lf.append('NAV sotto MM50 — trend a lungo negativo')
+    if mm20_v and mm50_v:
+        if mm20_v > mm50_v: ls += 1; lf.append('MM20 > MM50 — allineamento rialzista')
+        else:               ls -= 1; lf.append('MM20 < MM50 — allineamento ribassista')
+    if dist_52w > -10:   ls += 1; lf.append(f'NAV a {dist_52w:.1f}% dal max 52W — forza strutturale')
+    elif dist_52w < -25: ls -= 1; lf.append(f'NAV a {dist_52w:.1f}% dal max 52W — debolezza strutturale')
+    else:                          lf.append(f'NAV a {dist_52w:.1f}% dal max 52W')
+    if adx_v > 30: ls += 1; lf.append(f'ADX {adx_v:.0f} — trend forte e sostenuto')
+
+    sv, mv, lv = verdict(ss), verdict(ms), verdict(ls)
+
+    # ── Portfolio Analysis (parametri opzionali) ──────────────────────────────
+    portfolio_analysis = None
+    ep_str = request.args.get('entry_price')
+    ed_str = request.args.get('entry_date')
+    if ep_str and ed_str:
+        try:
+            from datetime import date as date_type
+            ep = float(ep_str)
+            nav_curr = float(nav_v) if nav_v else 0.0
+
+            # P&L e durata
+            pnl_pct = round((nav_curr - ep) / ep * 100, 2) if ep > 0 else 0.0
+            try:
+                entry_dt = datetime.strptime(ed_str, '%Y-%m-%d').date()
+                days_held = (date_type.today() - entry_dt).days
+            except Exception:
+                days_held = 0
+
+            # Rendimento annualizzato
+            ann_ret = None
+            if days_held > 7 and ep > 0:
+                ann_ret = round(((nav_curr / ep) ** (365.0 / days_held) - 1) * 100, 2)
+
+            # Volatilità 30gg e media variazione giornaliera
+            pct_30 = df['pct_1g'].dropna().tail(30)
+            vol_30d   = round(float(pct_30.std()),  3) if len(pct_30) > 1 else None
+            avg_daily = round(float(pct_30.mean()), 3) if len(pct_30) > 1 else None
+
+            # Max Drawdown dall'acquisto
+            date_col = df['date'].apply(lambda x: str(x.date() if hasattr(x, 'date') else x)[:10])
+            since_mask   = date_col >= ed_str
+            since_prices = df.loc[since_mask, 'price'].astype(float)
+            max_dd = None
+            if len(since_prices) > 1:
+                peak, worst = float(since_prices.iloc[0]), 0.0
+                for p in since_prices:
+                    p = float(p)
+                    if p > peak: peak = p
+                    dd = (p - peak) / peak * 100
+                    if dd < worst: worst = dd
+                max_dd = round(worst, 2)
+
+            # Analisi entrata: trova i valori del giorno di acquisto nello storico COMPLETO
+            entry_rsi = entry_dist = entry_nav_actual = None
+            all_hist_df = df.copy()
+            for _, row in all_hist_df.iterrows():
+                d_str = str(row['date'].date() if hasattr(row['date'], 'date') else row['date'])[:10]
+                if d_str >= ed_str:
+                    entry_rsi   = fmt(row['rsi14'], 1)
+                    entry_dist  = fmt(row['dist_mm20'], 2)
+                    entry_nav_actual = fmt(row['price'], 4)
+                    break
+
+            portfolio_analysis = {
+                'entry_price':       ep,
+                'entry_date':        ed_str,
+                'entry_nav_actual':  entry_nav_actual,
+                'pnl_pct':           pnl_pct,
+                'days_held':         days_held,
+                'annualized_return': ann_ret,
+                'volatility_30d':    vol_30d,
+                'avg_daily_change':  avg_daily,
+                'max_drawdown_entry': max_dd,
+                'entry_rsi':         entry_rsi,
+                'entry_dist_mm20':   entry_dist,
+                'stop_mm20':         fmt(float(mm20_v), 4) if mm20_v else None,
+                'stop_5pct':         fmt(ep * 0.95, 4),
+                'target_5pct':       fmt(ep * 1.05, 4),
+                'target_10pct':      fmt(ep * 1.10, 4),
+                'target_15pct':      fmt(ep * 1.15, 4),
+            }
+        except Exception as exc:
+            portfolio_analysis = {'error': str(exc)}
+
+    return jsonify({
+        'isin':         isin,
+        'fund_name':    fund_info.get('nome') or isin,
+        'asset_type':   asset_type,
+        'level':        fund_info.get('livello'),
+        'signal_purity': fund_info.get('signal_purity'),
+        'history':      history,
+        'count':        len(history),
+        'dist_52w':     dist_52w,
+        'current': {
+            'nav':       fmt(nav_v, 4),
+            'rsi14':     fmt(rsi, 1),
+            'adx':       fmt(adx_v, 1),
+            'mm20':      fmt(mm20_v, 4),
+            'mm50':      fmt(mm50_v, 4) if mm50_v else None,
+            'dist_mm20': fmt(dist, 1),
+            'macd_hist': fmt(mh, 4),
+            'dist_52w':  dist_52w,
+        },
+        'sentiment': {
+            'short': {'verdict': sv, 'score': ss, 'label': 'Breve termine (1–2 sett.)', 'factors': sf, 'color': vcolor(sv)},
+            'mid':   {'verdict': mv, 'score': ms, 'label': 'Medio termine (1–3 mesi)',  'factors': mf, 'color': vcolor(mv)},
+            'long':  {'verdict': lv, 'score': ls, 'label': 'Lungo termine (6–12 mesi)', 'factors': lf, 'color': vcolor(lv)},
+        },
+        'portfolio_analysis': portfolio_analysis,
+    })
 
 
 if __name__ == '__main__':

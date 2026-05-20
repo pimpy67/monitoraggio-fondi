@@ -246,13 +246,18 @@ class FundMonitor:
         analysis = analyzer.analyze_fund(prices, level=level)
         analysis['asset_type'] = asset_type
 
+        # Analisi L0 "Deep Recovery" — valida sia per entry (level != 0) sia exit (level == 0)
+        l0_analysis = analyzer.suggest_level_0(prices, level)
+
         return {
             'isin': isin,
             'nome': row['Nome Fondo'],
             'casa': row['Casa Gestione'],
             'categoria': categoria,
             'livello': level,
-            'analysis': analysis
+            'analysis': analysis,
+            'l0_analysis': l0_analysis,
+            'prices': prices,  # tenuto per calcolo panic_low in send_alerts
         }
     
     def update_excel(self, results: list):
@@ -427,15 +432,17 @@ class FundMonitor:
                 'pct_1w': float(r['analysis'].get('pct_change_1w')) if r['analysis'].get('pct_change_1w') is not None else None,
                 'pct_1m': float(r['analysis'].get('pct_change_1m')) if r['analysis'].get('pct_change_1m') is not None else None,
                 'buy_count': int(r['analysis'].get('buy_count', 0)),
-                'asset_type': r['analysis'].get('asset_type', 'equity'),
+                'asset_type': r['analysis'].get('asset_type', 'equity_developed'),
                 'conditions': {
-                    'trend_ok': bool(r['analysis'].get('level_conditions', {}).get('trend_ok', False)),
+                    'allineamento_ok': bool(r['analysis'].get('level_conditions', {}).get('allineamento_ok', False)),
+                    'persistenza_ok': bool(r['analysis'].get('level_conditions', {}).get('persistenza_ok', False)),
                     'rsi_optimal': bool(r['analysis'].get('level_conditions', {}).get('rsi_optimal', False)),
-                    'nav_above_bb': bool(r['analysis'].get('level_conditions', {}).get('nav_above_upper_bb', False)),
-                    'nav_rising': bool(r['analysis'].get('level_conditions', {}).get('nav_rising', False)),
-                    'nav_rising_original': bool(r['analysis'].get('level_conditions', {}).get('nav_rising_original', False)),
-                    'nav_rising_alt': bool(r['analysis'].get('level_conditions', {}).get('nav_rising_alt', False)),
-                }
+                    'distance_ok': bool(r['analysis'].get('level_conditions', {}).get('distance_ok', False)),
+                    'adx_ok': bool(r['analysis'].get('level_conditions', {}).get('adx_ok', False)),
+                    'adx_entry_ok': bool(r['analysis'].get('level_conditions', {}).get('adx_entry_ok', False)),
+                    'nav_momentum_ok': bool(r['analysis'].get('level_conditions', {}).get('nav_momentum_ok', False)),
+                },
+                'signal_purity': r.get('signal_purity', {'available': False, 'reason': 'N/D'}),
             }
             dashboard_data['levels'][level].append(fund_data)
 
@@ -465,6 +472,51 @@ class FundMonitor:
         if hasattr(self, '_health_report'):
             dashboard_data['health'] = self._health_report
 
+        # Dati L0 "Deep Recovery" per la dashboard
+        try:
+            existing_l0 = self.db.get_all_l0_entries()
+            today_d = datetime.now().date()
+            l0_list = []
+            for isin, entry in existing_l0.items():
+                r = next((x for x in results if x['isin'] == isin), None)
+                if not r:
+                    continue
+                price = r['analysis'].get('current_price')
+                rsi = r['analysis'].get('rsi')
+                l0a = r.get('l0_analysis', {})
+                peak_val  = l0a.get('peak_price')
+                peak_days = l0a.get('peak_days')
+                dist_peak = l0a.get('distance_from_peak')
+                pct_gain = None
+                if price and entry['entry_price']:
+                    pct_gain = round((float(price) - float(entry['entry_price'])) / float(entry['entry_price']) * 100, 2)
+                try:
+                    import numpy as np
+                    ed = datetime.strptime(str(entry['entry_date'])[:10], '%Y-%m-%d').date()
+                    days_in_l0 = max(1, int(np.busday_count(ed, today_d)) + 1)
+                except Exception:
+                    days_in_l0 = 1
+                l0_list.append({
+                    'isin': isin,
+                    'nome': r['nome'],
+                    'casa': r['casa'],
+                    'categoria': r['categoria'],
+                    'entry_date': str(entry['entry_date']),
+                    'entry_price': float(entry['entry_price']),
+                    'panic_low': float(entry['panic_low']),
+                    'price': float(price) if price else None,
+                    'rsi': float(rsi) if rsi else None,
+                    'peak_price': float(peak_val) if peak_val else None,
+                    'peak_days': peak_days,
+                    'distance_from_peak': dist_peak,
+                    'pct_gain': pct_gain,
+                    'days_in_l0': days_in_l0,
+                })
+            dashboard_data['l0_funds'] = l0_list
+        except Exception as e:
+            dashboard_data['l0_funds'] = []
+            print(f"Errore caricamento L0 per dashboard: {e}")
+
         with open('data/dashboard_data.json', 'w') as f:
             json.dump(dashboard_data, f, indent=2, cls=SafeEncoder)
 
@@ -482,8 +534,8 @@ class FundMonitor:
             Dizionario con buy_count, conditions (lista), e valori tecnici chiave
         """
         analysis = result['analysis']
-        asset_type = analysis.get('asset_type', 'equity')
-        profile = TechnicalAnalyzer.PROFILES.get(asset_type, TechnicalAnalyzer.PROFILES['equity'])
+        asset_type = analysis.get('asset_type', 'equity_developed')
+        profile = TechnicalAnalyzer.PROFILES.get(asset_type, TechnicalAnalyzer.PROFILES['equity_developed'])
 
         lc = analysis.get('level_conditions', {})
         conditions = []
@@ -564,7 +616,7 @@ class FundMonitor:
                 'gap_text': None, 'forecast': None
             })
         elif price and ma_val and bb_upper:
-            if asset_type == 'equity':
+            if asset_type in TechnicalAnalyzer.EQUITY_FAMILY:
                 midpoint = (ma_val + bb_upper) / 2
                 gap_pct = (midpoint - price) / price * 100
                 conditions.append({
@@ -744,6 +796,18 @@ class FundMonitor:
             pct_str      = f'{pct_gain:+.2f}%' if pct_gain is not None else 'N/D'
             add_log(f"  🔴 Uscita L1: {fund_result['nome'][:40]} — {pct_str} {rule_label}")
             self.alert_system.send_sell_l1_exit(sell_info)
+            self.db.save_l1_exit(
+                isin=isin,
+                fund_name=fund_result['nome'],
+                exit_date=today_str,
+                exit_price=exit_price,
+                exit_rule=exit_rule,
+                exit_trigger=exit_trigger,
+                entry_date=entry_date,
+                entry_price=entry_price,
+                days_in_l1=days_in_l1,
+                pct_gain=pct_gain,
+            )
             self.db.remove_l1_entry(isin)
 
         # Invia digest giornaliero L1
@@ -752,7 +816,146 @@ class FundMonitor:
             self.alert_system.send_l1_digest(l1_funds_data)
         else:
             add_log("  ℹ️ Nessun fondo in L1 — digest non inviato")
-    
+
+        # ── L0 "Deep Recovery" Tracking ──────────────────────────────────────
+        existing_l0 = self.db.get_all_l0_entries()  # {isin: {entry_date, entry_price, panic_low}}
+
+        current_l0_isins = set()
+        l0_funds_data = []
+
+        for r in results:
+            isin = r['isin']
+            l0 = r.get('l0_analysis', {})
+
+            # Se il fondo è già in L0 tracking nel DB, gestisci uscite
+            if isin in existing_l0:
+                current_l0_isins.add(isin)
+                entry = existing_l0[isin]
+                entry_date = entry['entry_date']
+                entry_price = entry['entry_price']
+                panic_low = entry['panic_low']
+
+                current_price = r['analysis'].get('current_price')
+                current_rsi = r['analysis'].get('rsi')
+                mm20 = r['analysis'].get('ma')
+
+                # Calcola giorni in L0 (giorni di borsa)
+                try:
+                    import numpy as np
+                    ed = entry_date if isinstance(entry_date, date_type) else datetime.fromisoformat(str(entry_date)).date()
+                    days_in_l0 = max(1, int(np.busday_count(ed, today)) + 1)
+                except Exception:
+                    days_in_l0 = 1
+
+                pct_gain = None
+                if current_price and entry_price:
+                    pct_gain = round((float(current_price) - float(entry_price)) / float(entry_price) * 100, 2)
+
+                # Controlla regole di uscita
+                exit_rule = None
+                if current_price and panic_low and float(current_price) < float(panic_low):
+                    exit_rule = 'alpha'
+                elif current_rsi is not None and float(current_rsi) < 25:
+                    exit_rule = 'beta'
+                elif current_price and mm20 and float(current_price) > float(mm20):
+                    exit_rule = 'gamma'
+                elif days_in_l0 > 30:
+                    exit_rule = 'epsilon'
+
+                if exit_rule:
+                    pct_str = f'{pct_gain:+.2f}%' if pct_gain is not None else 'N/D'
+                    add_log(f"  🟠 Uscita L0 [{exit_rule}]: {r['nome'][:40]} — {pct_str}")
+                    self.alert_system.send_sell_l0_exit({
+                        'isin': isin,
+                        'nome': r['nome'],
+                        'casa': r['casa'],
+                        'categoria': r['categoria'],
+                        'entry_date': entry_date,
+                        'entry_price': entry_price,
+                        'panic_low': panic_low,
+                        'exit_price': float(current_price) if current_price else None,
+                        'days_in_l0': days_in_l0,
+                        'pct_gain': pct_gain,
+                        'exit_rule': exit_rule,
+                        'conditions': {
+                            **l0,
+                            'mm20_current': mm20,
+                            'rsi': current_rsi,
+                        },
+                    })
+                    self.db.remove_l0_entry(isin)
+                    current_l0_isins.discard(isin)
+                else:
+                    # Ancora in L0 — accumula per digest
+                    l0_funds_data.append({
+                        'isin': isin,
+                        'nome': r['nome'],
+                        'casa': r['casa'],
+                        'categoria': r['categoria'],
+                        'entry_date': entry_date,
+                        'entry_price': entry_price,
+                        'panic_low': panic_low,
+                        'price': float(current_price) if current_price else None,
+                        'days_in_l0': days_in_l0,
+                        'pct_gain': pct_gain,
+                        'level_conditions': {
+                            **l0,
+                            'mm20_current': mm20,
+                            'rsi': current_rsi,
+                        },
+                    })
+                continue
+
+            # Fondo non ancora in L0: verifica se entra
+            if not l0.get('l0_entry'):
+                continue
+
+            # Nuovo ingresso in L0
+            current_price = r['analysis'].get('current_price')
+            panic_low = l0.get('panic_low')
+
+            if not current_price or not panic_low:
+                continue
+
+            self.db.set_l0_entry(isin, today_str, float(current_price), float(panic_low))
+            current_l0_isins.add(isin)
+            add_log(
+                f"  🟠 Nuovo L0: {r['nome'][:40]} — "
+                f"€{float(current_price):.4f} · panic_low=€{float(panic_low):.4f}"
+            )
+            l0_funds_data.append({
+                'isin': isin,
+                'nome': r['nome'],
+                'casa': r['casa'],
+                'categoria': r['categoria'],
+                'entry_date': today,
+                'entry_price': float(current_price),
+                'panic_low': float(panic_low),
+                'price': float(current_price),
+                'days_in_l0': 1,
+                'pct_gain': 0.0,
+                'level_conditions': {
+                    **l0,
+                    'mm20_current': r['analysis'].get('ma'),
+                    'rsi': r['analysis'].get('rsi'),
+                },
+            })
+
+        # Fondi usciti dalla lista fondi (rimossi dall'Excel) ma ancora in L0 tracking
+        for isin, entry in existing_l0.items():
+            if isin in current_l0_isins:
+                continue
+            fund_result = next((r for r in results if r['isin'] == isin), None)
+            if not fund_result:
+                self.db.remove_l0_entry(isin)
+
+        # Invia digest giornaliero L0
+        if l0_funds_data:
+            add_log(f"  📧 Invio digest L0: {len(l0_funds_data)} fondi in recupero")
+            self.alert_system.send_l0_digest(l0_funds_data)
+        else:
+            add_log("  ℹ️ Nessun fondo in L0 — digest non inviato")
+
     def run(self, send_daily_report: bool = True):
         """
         Esegue ciclo completo di monitoraggio
@@ -771,6 +974,20 @@ class FundMonitor:
             return
 
         add_log(f"Caricati {len(df_funds)} fondi dal file Excel")
+
+        # 1b. Fetch benchmark data per Signal Purity Score (una volta per run)
+        benchmark_series = {}
+        add_log("Fetching benchmark data (Signal Purity)...")
+        try:
+            fetched_tickers = {}
+            for at, ticker in TechnicalAnalyzer.BENCHMARK_TICKERS.items():
+                if ticker not in fetched_tickers:
+                    s = self.data_fetcher.get_benchmark_history(ticker, days=120)
+                    fetched_tickers[ticker] = s
+                    add_log(f"  Benchmark {at} ({ticker}): {len(s)} gg" if not s.empty else f"  Benchmark {at} ({ticker}): N/D")
+                benchmark_series[at] = fetched_tickers[TechnicalAnalyzer.BENCHMARK_TICKERS[at]]
+        except Exception as e:
+            add_log(f"  Benchmark fetch errore: {e}")
 
         # 2. Analizza ogni fondo
         add_log(f"Inizio analisi di {len(df_funds)} fondi...")
@@ -791,6 +1008,18 @@ class FundMonitor:
                 executor.shutdown(wait=False)  # Non bloccare — thread orfano continua in bg
                 if timed_out:
                     continue
+                # Signal Purity Score
+                try:
+                    asset_type = result['analysis'].get('asset_type', 'equity_developed')
+                    bench = benchmark_series.get(asset_type)
+                    if bench is not None and not bench.empty and not result['prices'].empty:
+                        result['signal_purity'] = TechnicalAnalyzer.calculate_signal_purity(
+                            result['prices'], bench
+                        )
+                    else:
+                        result['signal_purity'] = {'available': False, 'reason': 'Benchmark N/D'}
+                except Exception as pe:
+                    result['signal_purity'] = {'available': False, 'reason': str(pe)}
                 results.append(result)
                 add_log(f"  OK {row['ISIN']} - {row['Nome Fondo'][:30]}")
                 time.sleep(0.5)  # Rate limiting
@@ -853,7 +1082,7 @@ class FundMonitor:
                         'pct_1w': float(r['analysis'].get('pct_change_1w')) if r['analysis'].get('pct_change_1w') is not None else None,
                         'pct_1m': float(r['analysis'].get('pct_change_1m')) if r['analysis'].get('pct_change_1m') is not None else None,
                         'buy_count': int(r['analysis'].get('buy_count', 0)),
-                        'asset_type': r['analysis'].get('asset_type', 'equity'),
+                        'asset_type': r['analysis'].get('asset_type', 'equity_developed'),
                         'conditions': {
                             'trend_ok': bool(r['analysis'].get('level_conditions', {}).get('trend_ok', False)),
                             'rsi_optimal': bool(r['analysis'].get('level_conditions', {}).get('rsi_optimal', False)),

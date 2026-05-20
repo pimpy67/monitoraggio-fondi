@@ -172,8 +172,45 @@ class PriceDatabase:
                         entry_price DECIMAL(12, 4) NOT NULL
                     )
                 """)
+                # Tabella per tracciare l'ingresso dei fondi in Livello 0 (Deep Recovery)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS l0_tracking (
+                        isin VARCHAR(20) PRIMARY KEY,
+                        entry_date DATE NOT NULL,
+                        entry_price DECIMAL(12, 4) NOT NULL,
+                        panic_low DECIMAL(12, 4) NOT NULL
+                    )
+                """)
+                # Tabella per il portafoglio personale dell'utente
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS portfolio_entries (
+                        isin VARCHAR(20) PRIMARY KEY,
+                        entry_date DATE NOT NULL,
+                        entry_price DECIMAL(12, 4) NOT NULL,
+                        fund_name VARCHAR(200),
+                        added_at TIMESTAMP DEFAULT NOW()
+                    )
+                """)
+                # Storico uscite da L1 (fondi che hanno lasciato il livello 1)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS l1_exit_history (
+                        id SERIAL PRIMARY KEY,
+                        isin VARCHAR(20) NOT NULL,
+                        fund_name VARCHAR(200),
+                        exit_date DATE NOT NULL,
+                        exit_price DECIMAL(12, 4),
+                        exit_rule INTEGER,
+                        exit_trigger TEXT,
+                        entry_date DATE,
+                        entry_price DECIMAL(12, 4),
+                        days_in_l1 INTEGER,
+                        pct_gain DECIMAL(8, 4),
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_l1_exit_date ON l1_exit_history(exit_date DESC)")
                 conn.commit()
-                print("Tabelle price_history e l1_tracking pronte")
+                print("Tabelle price_history, l1_tracking, l0_tracking, portfolio_entries, l1_exit_history pronte")
         except Exception as e:
             logging.error(f"Errore creazione tabella: {e}")
         finally:
@@ -432,6 +469,230 @@ class PriceDatabase:
             return False
         finally:
             conn.close()
+
+    def save_l1_exit(self, isin: str, fund_name: str, exit_date: str, exit_price,
+                     exit_rule, exit_trigger: str, entry_date, entry_price,
+                     days_in_l1: int, pct_gain) -> bool:
+        """Registra l'uscita di un fondo da L1 nello storico."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO l1_exit_history
+                        (isin, fund_name, exit_date, exit_price, exit_rule, exit_trigger,
+                         entry_date, entry_price, days_in_l1, pct_gain)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (isin, fund_name,
+                      exit_date,
+                      float(exit_price) if exit_price else None,
+                      exit_rule,
+                      exit_trigger,
+                      str(entry_date) if entry_date else None,
+                      float(entry_price) if entry_price else None,
+                      days_in_l1,
+                      float(pct_gain) if pct_gain is not None else None))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore save_l1_exit {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def get_l1_exits(self, days: int = 30) -> list:
+        """Restituisce le ultime N giorni di uscite da L1."""
+        conn = self._get_connection()
+        if not conn:
+            return []
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT isin, fund_name, exit_date, exit_price, exit_rule, exit_trigger,
+                           entry_date, entry_price, days_in_l1, pct_gain
+                    FROM l1_exit_history
+                    WHERE exit_date >= CURRENT_DATE - INTERVAL '%s days'
+                    ORDER BY exit_date DESC
+                """, (days,))
+                rows = cur.fetchall()
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logging.error(f"Errore get_l1_exits: {e}")
+            return []
+        finally:
+            conn.close()
+
+    # ── L0 Tracking ──────────────────────────────────────────────────────────
+
+    def get_all_l0_entries(self) -> Dict[str, Dict]:
+        """
+        Restituisce tutti i fondi attualmente tracciati in L0.
+
+        Returns:
+            Dict {isin: {entry_date, entry_price, panic_low}}
+        """
+        conn = self._get_connection()
+        if not conn:
+            return {}
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT isin, entry_date, entry_price, panic_low FROM l0_tracking")
+                rows = cur.fetchall()
+                return {
+                    r['isin']: {
+                        'entry_date': r['entry_date'],
+                        'entry_price': float(r['entry_price']),
+                        'panic_low': float(r['panic_low'])
+                    }
+                    for r in rows
+                }
+        except Exception as e:
+            logging.error(f"Errore get_all_l0_entries: {e}")
+            return {}
+        finally:
+            conn.close()
+
+    def set_l0_entry(self, isin: str, entry_date: str, entry_price: float, panic_low: float) -> bool:
+        """
+        Registra l'ingresso di un fondo in L0 (INSERT, non sovrascrive se già presente).
+
+        Args:
+            isin: Codice ISIN
+            entry_date: Data ingresso 'YYYY-MM-DD'
+            entry_price: Prezzo al momento dell'ingresso
+            panic_low: Minimo del panic move (stop loss assoluto)
+        """
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO l0_tracking (isin, entry_date, entry_price, panic_low)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (isin) DO NOTHING
+                """, (isin, entry_date, float(entry_price), float(panic_low)))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore set_l0_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def remove_l0_entry(self, isin: str) -> bool:
+        """Rimuove un fondo dal tracking L0 (uscita da L0)."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM l0_tracking WHERE isin = %s", (isin,))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore remove_l0_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+
+    # ── Portfolio Personale ───────────────────────────────────────────────────
+
+    def get_portfolio_entries(self) -> List[Dict]:
+        """
+        Restituisce tutti i fondi nel portafoglio personale.
+
+        Returns:
+            Lista di dict {isin, entry_date, entry_price, fund_name, added_at}
+        """
+        conn = self._get_connection()
+        if not conn:
+            return []
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT isin, entry_date, entry_price, fund_name, added_at
+                    FROM portfolio_entries
+                    ORDER BY added_at DESC
+                """)
+                rows = cur.fetchall()
+                return [
+                    {
+                        'isin': r['isin'],
+                        'entry_date': str(r['entry_date']),
+                        'entry_price': float(r['entry_price']),
+                        'fund_name': r['fund_name'] or '',
+                        'added_at': str(r['added_at'])
+                    }
+                    for r in rows
+                ]
+        except Exception as e:
+            logging.error(f"Errore get_portfolio_entries: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def add_portfolio_entry(self, isin: str, entry_date: str, entry_price: float,
+                            fund_name: str = '') -> bool:
+        """
+        Aggiunge o aggiorna un fondo nel portafoglio personale.
+
+        Args:
+            isin: Codice ISIN
+            entry_date: Data di acquisto 'YYYY-MM-DD'
+            entry_price: Prezzo di acquisto (NAV)
+            fund_name: Nome del fondo (opzionale)
+        """
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO portfolio_entries (isin, entry_date, entry_price, fund_name, added_at)
+                    VALUES (%s, %s, %s, %s, NOW())
+                    ON CONFLICT (isin)
+                    DO UPDATE SET
+                        entry_date = EXCLUDED.entry_date,
+                        entry_price = EXCLUDED.entry_price,
+                        fund_name = EXCLUDED.fund_name,
+                        added_at = NOW()
+                """, (isin, entry_date, float(entry_price), fund_name))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore add_portfolio_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def remove_portfolio_entry(self, isin: str) -> bool:
+        """Rimuove un fondo dal portafoglio personale."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM portfolio_entries WHERE isin = %s", (isin,))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore remove_portfolio_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def get_portfolio_price_history(self, isin: str, days: int = 60) -> pd.DataFrame:
+        """
+        Recupera lo storico prezzi per un fondo del portafoglio.
+        Ritorna piu' giorni del necessario per permettere il calcolo degli indicatori (SMA20, RSI14).
+
+        Returns:
+            DataFrame con colonne [date, price] ordinato per data crescente
+        """
+        return self.get_prices(isin, days)
 
 
 def test_database():

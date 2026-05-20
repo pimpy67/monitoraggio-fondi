@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fund Monitor Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1a1a2e, #16213e); min-height: 100vh; color: #fff; }
@@ -22,12 +23,34 @@
         .container { max-width: 1400px; margin: 0 auto; padding: 15px 20px; }
         .level-section { background: rgba(255,255,255,0.05); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
         .level-header { padding: 12px 20px; font-weight: bold; display: flex; justify-content: space-between; }
+        .level-0 .level-header { background: linear-gradient(90deg, #E65100, #FF8F00); }
+        .level-0-table th { padding: 8px 8px; text-align: left; font-size: 0.8em; font-weight: bold; color: #aaa; }
+        .level-0-table thead { display: table-header-group; background: rgba(10,15,30,0.7); border-bottom: 1px solid rgba(255,255,255,0.15); }
         .level-1 .level-header { background: linear-gradient(90deg, #00B050, #00D060); }
         .level-2 .level-header { background: linear-gradient(90deg, #FFC000, #FFD000); color: #333; }
         .level-3 .level-header { background: linear-gradient(90deg, #4472C4, #5A8FD4); }
         /* Column widths shared between header and tables */
-        .col-nome { width: 28%; } .col-casa { width: 10%; } .col-prezzo { width: 8%; }
-        .col-pct { width: 7%; } .col-ma { width: 8%; } .col-rsi { width: 6%; } .col-buy { width: 6%; }
+        .col-nome { width: 23%; } .col-casa { width: 10%; } .col-prezzo { width: 8%; }
+        .col-pct { width: 7%; } .col-ma { width: 8%; } .col-rsi { width: 6%; } .col-buy { width: 6%; } .col-purity { width: 5%; }
+        .purity-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; flex-shrink: 0; }
+        .purity-dot.green  { background: #00B050; box-shadow: 0 0 5px #00B050; }
+        .purity-dot.yellow { background: #FFC000; box-shadow: 0 0 5px #FFC000; }
+        .purity-dot.red    { background: #DC3545; box-shadow: 0 0 5px #DC3545; }
+        .purity-dot.grey   { background: #555; }
+        .purity-score-cell { font-size: 0.72em; color: #aaa; display: flex; align-items: center; gap: 4px; }
+        /* Pannello Signal Purity nel modal */
+        .purity-panel { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; border-left: 3px solid #555; }
+        .purity-panel.green  { border-left-color: #00B050; }
+        .purity-panel.yellow { border-left-color: #FFC000; }
+        .purity-panel.red    { border-left-color: #DC3545; }
+        .purity-panel .pp-title { font-size: 0.75em; font-weight: bold; color: #aaa; white-space: nowrap; }
+        .purity-metric { text-align: center; min-width: 72px; }
+        .purity-metric .pm-val   { font-size: 1em; font-weight: bold; }
+        .purity-metric .pm-label { font-size: 0.68em; color: #777; margin-top: 2px; }
+        .purity-metric .pm-val.green  { color: #00B050; }
+        .purity-metric .pm-val.yellow { color: #FFC000; }
+        .purity-metric .pm-val.red    { color: #DC3545; }
+        .purity-benchmark { font-size: 0.72em; color: #666; margin-left: auto; font-style: italic; }
         .buy-count { font-weight: bold; font-size: 0.85em; }
         .buy-count.bc4 { color: #00ff88; text-shadow: 0 0 6px #00ff88; }
         .buy-count.bc3 { color: #7fff00; }
@@ -35,6 +58,39 @@
         .buy-count.bc1 { color: #ff9966; }
         .buy-count.bc0 { color: #888; }
         .cond-dots { font-size: 0.7em; margin-left: 3px; letter-spacing: 1px; }
+        /* Buy count bc5 (5/6 ok — quasi pronto per L1) */
+        .buy-count.bc5 { color: #00ff88; text-shadow: 0 0 6px #00ff88; }
+        /* Buy count bc6 (tutte 6/6 ok) */
+        .buy-count.bc6 { color: #fff; text-shadow: 0 0 8px #00ff88, 0 0 16px #00B050; }
+        /* Purity badge (sostituisce il pallino + score) */
+        .purity-badge { display:inline-block; padding:2px 5px; border-radius:3px; font-size:0.68em; font-weight:bold; letter-spacing:0.3px; cursor:default; white-space:nowrap; }
+        .purity-badge.green  { background:rgba(0,176,80,0.18); color:#00D060; border:1px solid rgba(0,176,80,0.5); }
+        .purity-badge.yellow { background:rgba(255,192,0,0.18); color:#FFD030; border:1px solid rgba(255,192,0,0.5); }
+        .purity-badge.red    { background:rgba(220,53,69,0.18); color:#FF6070; border:1px solid rgba(220,53,69,0.5); }
+        .purity-badge.grey   { background:rgba(80,80,80,0.15); color:#666; border:1px solid #333; }
+        /* Badge NUOVO (lampeggiante, solo gg 1-2) */
+        @keyframes pulse-nuovo { 0%,100%{opacity:1} 50%{opacity:0.35} }
+        .badge-nuovo { display:inline-block; background:#00B050; color:#fff; font-size:0.58em; font-weight:bold; padding:1px 5px; border-radius:3px; margin-left:5px; vertical-align:middle; animation:pulse-nuovo 1.1s ease-in-out infinite; letter-spacing:0.5px; }
+        /* Badge "in procinto" per L2 con 5/6 condizioni (manca solo 1) */
+        .badge-procinto { display:inline-block; font-size:0.62em; font-weight:bold; padding:1px 4px; border-radius:3px; margin-left:4px; vertical-align:middle; white-space:nowrap; }
+        .badge-procinto.p5 { background:rgba(255,143,0,0.2); color:#FF9800; border:1px solid rgba(255,143,0,0.5); }
+        .badge-procinto.p4 { background:rgba(255,192,0,0.15); color:#FFD030; border:1px solid rgba(255,192,0,0.4); }
+        /* Icona avviso uscita L1 */
+        .exit-warn { display:inline-block; font-size:0.72em; margin-left:4px; cursor:default; vertical-align:middle; }
+        /* Sezione usciti da L1 */
+        .l1-exits-section { margin-top:16px; background:rgba(220,53,69,0.04); border-radius:10px; border:1px solid rgba(220,53,69,0.18); overflow:hidden; }
+        .l1-exits-header { padding:10px 20px; background:rgba(220,53,69,0.07); display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
+        .l1-exits-header:hover { background:rgba(220,53,69,0.12); }
+        .l1-exits-header h3 { font-size:0.88em; color:#DC3545; font-weight:bold; margin:0; letter-spacing:0.5px; }
+        .l1-exits-body { padding:0 0 8px; }
+        .l1-exits-table { width:100%; border-collapse:collapse; font-size:0.82em; }
+        .l1-exits-table th { padding:7px 10px; text-align:left; color:#555; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.08); font-size:0.79em; background:rgba(10,15,30,0.5); white-space:nowrap; }
+        .l1-exits-table td { padding:7px 10px; border-bottom:1px solid rgba(255,255,255,0.04); color:#aaa; vertical-align:middle; }
+        .l1-exits-table tr:hover > td { background:rgba(255,255,255,0.02); }
+        .exit-rule-badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:0.75em; font-weight:bold; background:rgba(220,53,69,0.2); color:#FF6070; border:1px solid rgba(220,53,69,0.4); white-space:nowrap; }
+        /* L1 table con thead visibile (colonne diverse da L2/L3) */
+        .l1-table thead { display:table-header-group !important; background:rgba(10,15,30,0.7); border-bottom:1px solid rgba(255,255,255,0.1); }
+        .l1-table thead th { padding:7px 8px; text-align:left; font-size:0.78em; font-weight:bold; color:#888; }
         .legend { margin-bottom: 12px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.78em; color: #aaa; }
         .legend strong { color: #fff; }
         .column-header { position: sticky; top: 38px; z-index: 99; background: rgba(10,15,30,0.97); backdrop-filter: blur(8px); border-bottom: 2px solid rgba(255,255,255,0.15); padding: 0 20px; }
@@ -76,10 +132,206 @@
         .health-panel .hp-close { position: absolute; top: 8px; right: 12px; cursor: pointer; color: #888; font-size: 1.2em; }
         .health-panel .hp-close:hover { color: #fff; }
         .empty-msg { padding: 30px; text-align: center; color: #888; }
-        .category-filters { margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap; }
-        .cat-btn { padding: 6px 14px; border: none; border-radius: 15px; background: rgba(255,255,255,0.15); color: #fff; cursor: pointer; }
-        .cat-btn:hover, .cat-btn.active { background: #4472C4; }
-        @media (max-width: 768px) { .header { flex-wrap: wrap; gap: 4px; } .fund-table td, .column-header th { padding: 6px 4px; font-size: 0.72em; } }
+        /* ── Sidebar gestori ── */
+        .page-body { display: flex; align-items: flex-start; }
+        .sidebar { width: 185px; min-width: 185px; flex-shrink: 0; position: sticky; top: 38px; height: calc(100vh - 38px); overflow-y: auto; background: rgba(10,15,30,0.97); border-right: 1px solid rgba(255,255,255,0.08); padding: 8px 0; scrollbar-width: thin; scrollbar-color: #333 transparent; }
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+        .sidebar-title { font-size: 0.68em; font-weight: bold; color: #555; padding: 4px 10px 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .company-btn { display: block; width: 100%; padding: 5px 10px 5px 13px; border: none; background: transparent; color: #aaa; text-align: left; cursor: pointer; font-size: 0.75em; line-height: 1.4; border-left: 3px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: all 0.15s; }
+        .company-btn:hover { background: rgba(255,255,255,0.06); color: #fff; }
+        .company-btn.active { background: rgba(68,114,196,0.18); color: #fff; border-left-color: #4472C4; font-weight: bold; }
+        .company-btn.all-btn { color: #ccc; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.07); padding-bottom: 8px; }
+        .main-area { flex: 1; min-width: 0; overflow: hidden; }
+        /* ── Sidebar categorie (destra) ── */
+        .sidebar-right { width: 185px; min-width: 185px; flex-shrink: 0; position: sticky; top: 38px; height: calc(100vh - 38px); overflow-y: auto; background: rgba(10,15,30,0.97); border-left: 1px solid rgba(255,255,255,0.08); padding: 8px 0; scrollbar-width: thin; scrollbar-color: #333 transparent; }
+        .sidebar-right::-webkit-scrollbar { width: 4px; }
+        .sidebar-right::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+        .cat-btn-side { display: block; width: 100%; padding: 5px 13px 5px 10px; border: none; background: transparent; color: #aaa; text-align: left; cursor: pointer; font-size: 0.75em; line-height: 1.4; border-right: 3px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: all 0.15s; }
+        .cat-btn-side:hover { background: rgba(255,255,255,0.06); color: #fff; }
+        .cat-btn-side.active { background: rgba(255,192,0,0.15); color: #fff; border-right-color: #FFC000; font-weight: bold; }
+        .cat-btn-side.all-btn { color: #ccc; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.07); padding-bottom: 8px; }
+        @media (max-width: 768px) { .header { flex-wrap: wrap; gap: 4px; } .fund-table td, .column-header th { padding: 6px 4px; font-size: 0.72em; } .sidebar { display: none; } .sidebar-right { display: none; } }
+        /* ── Tabella parametri di riferimento ── */
+        .param-ref { margin-top: 24px; background: rgba(255,255,255,0.04); border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
+        .param-ref-header { padding: 10px 20px; background: rgba(255,255,255,0.07); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+        .param-ref-header:hover { background: rgba(255,255,255,0.1); }
+        .param-ref-header h3 { font-size: 0.88em; color: #ccc; font-weight: bold; margin: 0; letter-spacing: 0.5px; }
+        .param-ref-toggle { color: #666; font-size: 0.75em; transition: transform 0.2s; }
+        .param-ref-toggle.open { transform: rotate(180deg); }
+        .param-ref-body { display: none; padding: 16px 20px 20px; }
+        .param-ref-body.open { display: block; }
+        .param-section-title { font-size: 0.78em; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px; margin: 14px 0 8px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .param-section-title:first-child { margin-top: 0; }
+        .param-table { width: 100%; border-collapse: collapse; font-size: 0.8em; }
+        .param-table th { padding: 7px 12px; text-align: left; color: #888; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 0.85em; }
+        /* Colori 7 classi */
+        .param-table th.cls-eq-dev  { color: #5A8FD4; }
+        .param-table th.cls-em      { color: #9B7FE8; }
+        .param-table th.cls-sect    { color: #FF8C42; }
+        .param-table th.cls-comm    { color: #D4A017; }
+        .param-table th.cls-gov     { color: #00B050; }
+        .param-table th.cls-corp    { color: #00CED1; }
+        .param-table th.cls-hy      { color: #FFC000; }
+        .param-table td.val-em      { color: #9B7FE8; font-weight: bold; }
+        .param-table td.val-sect    { color: #FF8C42; font-weight: bold; }
+        .param-table td.val-comm    { color: #D4A017; font-weight: bold; }
+        .param-table td.val-corp    { color: #00CED1; font-weight: bold; }
+        /* alias vecchi nomi usati sotto */
+        .param-table th.profile-equity { color: #5A8FD4; }
+        .param-table th.profile-bond { color: #00B050; }
+        .param-table th.profile-bondhyeq { color: #FFC000; }
+        .param-table td { padding: 6px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #bbb; vertical-align: middle; }
+        .param-table td.param-name { color: #888; font-size: 0.9em; white-space: nowrap; }
+        .param-table td.val { color: #fff; font-weight: bold; }
+        .param-table td.val-eq { color: #5A8FD4; font-weight: bold; }
+        .param-table td.val-bond { color: #00B050; font-weight: bold; }
+        .param-table td.val-hy { color: #FFC000; font-weight: bold; }
+        .param-table td.val-na { color: #555; font-style: italic; }
+        .param-table tr:hover td { background: rgba(255,255,255,0.03); }
+        .exit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin-top: 4px; }
+        .exit-item { font-size: 0.8em; color: #aaa; padding: 5px 10px; background: rgba(255,255,255,0.04); border-radius: 6px; border-left: 3px solid rgba(255,255,255,0.1); }
+        .exit-item .exit-label { font-weight: bold; color: #fff; display: inline-block; min-width: 22px; }
+        .exit-item.exit-l0 { border-left-color: #FF8F00; }
+        .exit-item.exit-l1 { border-left-color: #00B050; }
+        .profile-tag { display: inline-block; font-size: 0.72em; padding: 2px 6px; border-radius: 10px; margin-left: 4px; vertical-align: middle; font-weight: normal; }
+        .profile-tag.eq   { background: rgba(90,143,212,0.2);  color: #5A8FD4; }
+        .profile-tag.em   { background: rgba(155,127,232,0.2); color: #9B7FE8; }
+        .profile-tag.sect { background: rgba(255,140,66,0.2);  color: #FF8C42; }
+        .profile-tag.comm { background: rgba(212,160,23,0.2);  color: #D4A017; }
+        .profile-tag.gov  { background: rgba(0,176,80,0.2);    color: #00B050; }
+        .profile-tag.corp { background: rgba(0,206,209,0.2);   color: #00CED1; }
+        .profile-tag.hy   { background: rgba(255,192,0,0.2);   color: #FFC000; }
+        /* alias vecchi */
+        .profile-tag.bond { background: rgba(0,176,80,0.2); color: #00B050; }
+        /* ── Portfolio Personale ── */
+        .portfolio-section { margin-top: 24px; background: rgba(255,255,255,0.04); border-radius: 12px; overflow: hidden; border: 1px solid rgba(68,114,196,0.3); }
+        .portfolio-header { padding: 10px 20px; background: linear-gradient(90deg, rgba(68,114,196,0.25), rgba(68,114,196,0.08)); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+        .portfolio-header:hover { background: linear-gradient(90deg, rgba(68,114,196,0.35), rgba(68,114,196,0.15)); }
+        .portfolio-header h3 { font-size: 0.88em; color: #5A8FD4; font-weight: bold; margin: 0; letter-spacing: 0.5px; }
+        .portfolio-body { padding: 0 0 8px; }
+        .portfolio-table { width: 100%; border-collapse: collapse; font-size: 0.82em; }
+        .portfolio-table th { padding: 8px 10px; text-align: left; color: #666; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.8em; background: rgba(10,15,30,0.5); white-space: nowrap; }
+        .portfolio-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #ccc; vertical-align: middle; }
+        .portfolio-table tr:hover > td { background: rgba(255,255,255,0.03); }
+        .portfolio-empty { padding: 24px; text-align: center; color: #555; font-size: 0.85em; }
+        .perf-badge { font-weight: bold; padding: 2px 8px; border-radius: 10px; font-size: 0.9em; white-space: nowrap; }
+        .perf-badge.pos { background: rgba(0,176,80,0.15); color: #00B050; }
+        .perf-badge.neg { background: rgba(220,53,69,0.15); color: #DC3545; }
+        .perf-badge.zero { background: rgba(255,255,255,0.07); color: #888; }
+        .history-row td { padding: 0 !important; border-bottom: 2px solid rgba(68,114,196,0.2) !important; background: rgba(10,15,30,0.5) !important; }
+        .history-table { width: 100%; border-collapse: collapse; font-size: 0.79em; }
+        .history-table th { padding: 6px 10px; text-align: right; color: #555; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.07); background: rgba(5,8,18,0.7); }
+        .history-table th:first-child { text-align: left; }
+        .history-table td { padding: 5px 10px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.03); color: #999; }
+        .history-table td:first-child { text-align: left; color: #777; font-family: monospace; font-size: 0.93em; }
+        .history-table tr:hover td { background: rgba(255,255,255,0.02); }
+        .btn-portfolio-add { background: none; border: 1px solid rgba(68,114,196,0.4); color: #4472C4; border-radius: 4px; cursor: pointer; font-size: 0.7em; padding: 1px 5px; line-height: 1.4; transition: all 0.15s; white-space: nowrap; margin-left: 6px; vertical-align: middle; }
+        .btn-portfolio-add:hover { background: rgba(68,114,196,0.2); border-color: #5A8FD4; color: #fff; }
+        .btn-portfolio-add.in-portfolio { border-color: rgba(0,176,80,0.5); color: #00B050; }
+        .btn-portfolio-add.in-portfolio:hover { background: rgba(0,176,80,0.1); }
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 1000; backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+        .modal-overlay.open { display: flex; }
+        .modal-box { background: #16213e; border: 1px solid rgba(255,255,255,0.15); border-radius: 14px; padding: 24px 26px; width: 380px; max-width: 95vw; box-shadow: 0 16px 48px rgba(0,0,0,0.6); }
+        .modal-box h3 { margin: 0 0 18px; font-size: 0.98em; color: #5A8FD4; }
+        .modal-field { margin-bottom: 14px; }
+        .modal-field label { display: block; font-size: 0.75em; color: #777; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .modal-field input { width: 100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 8px 10px; color: #fff; font-size: 0.88em; outline: none; transition: border-color 0.15s; }
+        .modal-field input:focus { border-color: #5A8FD4; background: rgba(68,114,196,0.1); }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+        .btn-primary { background: #4472C4; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: 0.85em; font-weight: bold; transition: background 0.15s; }
+        .btn-primary:hover { background: #5A8FD4; }
+        .btn-cancel { background: rgba(255,255,255,0.06); color: #aaa; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 8px 14px; cursor: pointer; font-size: 0.85em; transition: all 0.15s; }
+        .btn-cancel:hover { background: rgba(255,255,255,0.12); color: #fff; }
+        .btn-remove { background: none; border: 1px solid rgba(220,53,69,0.35); color: #DC3545; border-radius: 4px; cursor: pointer; font-size: 0.75em; padding: 2px 7px; transition: all 0.15s; }
+        .btn-remove:hover { background: rgba(220,53,69,0.12); }
+        .btn-toggle-hist { background: none; border: 1px solid rgba(255,255,255,0.13); color: #777; border-radius: 4px; cursor: pointer; font-size: 0.75em; padding: 2px 7px; transition: all 0.15s; }
+        .btn-toggle-hist:hover { color: #fff; border-color: rgba(255,255,255,0.28); }
+        /* ── Fund Detail Modal ── */
+        .detail-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.78); z-index: 1100; backdrop-filter: blur(5px); align-items: flex-start; justify-content: center; overflow-y: auto; padding: 20px 10px; }
+        .detail-overlay.open { display: flex; }
+        .detail-box { background: #111827; border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; width: 900px; max-width: 98vw; box-shadow: 0 20px 60px rgba(0,0,0,0.7); padding: 0; overflow: hidden; position: relative; margin: auto; }
+        .detail-header { padding: 16px 22px 12px; background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: flex-start; }
+        .detail-title { font-size: 1em; font-weight: bold; color: #fff; }
+        .detail-isin { font-size: 0.72em; color: #555; font-family: monospace; margin-top: 2px; }
+        .detail-close { background: none; border: none; color: #666; font-size: 1.4em; cursor: pointer; padding: 0 4px; line-height: 1; }
+        .detail-close:hover { color: #fff; }
+        .detail-body { padding: 16px 22px 22px; }
+        /* Indicatori correnti */
+        .detail-kpis { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+        .kpi-box { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 12px; min-width: 90px; flex: 1; text-align: center; border: 1px solid rgba(255,255,255,0.07); }
+        .kpi-box .kpi-label { font-size: 0.68em; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+        .kpi-box .kpi-value { font-size: 1.1em; font-weight: bold; color: #fff; }
+        /* Sentiment */
+        .sentiment-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+        .sent-box { border-radius: 10px; padding: 12px 14px; border: 1px solid transparent; }
+        .sent-box.green { background: rgba(0,176,80,0.1); border-color: rgba(0,176,80,0.25); }
+        .sent-box.yellow { background: rgba(255,192,0,0.08); border-color: rgba(255,192,0,0.2); }
+        .sent-box.red { background: rgba(220,53,69,0.1); border-color: rgba(220,53,69,0.25); }
+        .sent-label { font-size: 0.7em; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .sent-verdict { font-size: 1.1em; font-weight: bold; margin-bottom: 8px; }
+        .sent-box.green .sent-verdict { color: #00B050; }
+        .sent-box.yellow .sent-verdict { color: #FFC000; }
+        .sent-box.red .sent-verdict { color: #DC3545; }
+        .sent-factors { font-size: 0.72em; color: #888; line-height: 1.6; }
+        .sent-factors li { list-style: none; padding-left: 10px; position: relative; }
+        .sent-factors li::before { content: '›'; position: absolute; left: 0; color: #555; }
+        /* Grafico */
+        .detail-chart-wrap { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 12px; margin-bottom: 16px; height: 200px; position: relative; }
+        /* Tabella storica */
+        .detail-hist-wrap { max-height: 300px; overflow-y: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.07); }
+        .detail-hist-wrap::-webkit-scrollbar { width: 5px; }
+        .detail-hist-wrap::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        .detail-table { width: 100%; border-collapse: collapse; font-size: 0.76em; }
+        .detail-table thead { position: sticky; top: 0; background: #0d1320; z-index: 1; }
+        .detail-table th { padding: 7px 8px; text-align: right; color: #555; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.08); white-space: nowrap; }
+        .detail-table th:first-child { text-align: left; }
+        .detail-table td { padding: 5px 8px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.04); color: #999; white-space: nowrap; }
+        .detail-table td:first-child { text-align: left; color: #666; font-family: monospace; }
+        .detail-table tr:hover td { background: rgba(255,255,255,0.02); }
+        .detail-days-btn { background: none; border: 1px solid rgba(255,255,255,0.12); color: #777; border-radius: 4px; cursor: pointer; font-size: 0.72em; padding: 2px 8px; margin-left: 4px; transition: all 0.15s; }
+        .detail-days-btn:hover, .detail-days-btn.active { background: rgba(68,114,196,0.2); border-color: #4472C4; color: #fff; }
+        /* ── Pannelli Portfolio nel Detail Modal ── */
+        .pf-perf-panel { background: rgba(0,176,80,0.07); border: 1px solid rgba(0,176,80,0.22); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+        .pf-risk-panel  { background: rgba(255,192,0,0.06); border: 1px solid rgba(255,192,0,0.2); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+        .pf-target-panel { background: rgba(68,114,196,0.07); border: 1px solid rgba(68,114,196,0.22); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+        .pf-entry-panel { background: rgba(255,140,66,0.06); border: 1px solid rgba(255,140,66,0.2); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
+        .panel-title { font-size: 0.68em; font-weight: bold; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 9px; display: flex; align-items: center; gap: 6px; }
+        .pf-perf-panel  .panel-title { color: #00B050; }
+        .pf-risk-panel  .panel-title { color: #FFC000; }
+        .pf-target-panel .panel-title { color: #5A8FD4; }
+        .pf-entry-panel .panel-title { color: #FF8C42; }
+        .panel-metrics { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+        .pm { display: flex; flex-direction: column; gap: 1px; min-width: 80px; }
+        .pm .pm-lbl { font-size: 0.63em; color: #555; text-transform: uppercase; letter-spacing: 0.4px; }
+        .pm .pm-val { font-size: 0.9em; font-weight: bold; color: #ccc; white-space: nowrap; }
+        .target-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .tg-item { background: rgba(255,255,255,0.04); border-radius: 6px; padding: 6px 8px; text-align: center; }
+        .tg-item .tg-lbl { font-size: 0.62em; color: #555; text-transform: uppercase; margin-bottom: 2px; }
+        .tg-item .tg-val { font-size: 0.82em; font-weight: bold; }
+        .tg-item.stop { border-left: 3px solid #DC3545; }
+        .tg-item.stop .tg-val { color: #DC3545; }
+        .tg-item.t5   { border-left: 3px solid #5A8FD4; }
+        .tg-item.t5   .tg-val { color: #5A8FD4; }
+        .tg-item.t10  { border-left: 3px solid #FFC000; }
+        .tg-item.t10  .tg-val { color: #FFC000; }
+        .tg-item.t15  { border-left: 3px solid #00B050; }
+        .tg-item.t15  .tg-val { color: #00B050; }
+        /* Narrativa */
+        .detail-narrative { margin-top: 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 14px 16px; font-size: 0.78em; color: #aaa; line-height: 1.8; }
+        .detail-narrative .nar-title { font-size: 0.8em; font-weight: bold; color: #5A8FD4; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+        .detail-narrative p { margin: 0 0 6px; }
+        .detail-narrative strong { color: #ddd; }
+        .detail-narrative .nar-sep { border: none; border-top: 1px solid rgba(255,255,255,0.07); margin: 8px 0; }
+        /* ── Search bar ── */
+        .search-wrap { position: relative; display: flex; align-items: center; }
+        .search-input { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.13); border-radius: 18px; padding: 4px 30px 4px 12px; color: #fff; font-size: 0.78em; width: 200px; outline: none; transition: border-color 0.15s, background 0.15s; }
+        .search-input::placeholder { color: #555; }
+        .search-input:focus { border-color: #4472C4; background: rgba(68,114,196,0.1); }
+        .search-clear { position: absolute; right: 8px; background: none; border: none; color: #555; cursor: pointer; font-size: 1em; line-height: 1; padding: 0; display: none; }
+        .search-clear:hover { color: #fff; }
+        .search-clear.visible { display: block; }
+        .search-highlight { background: rgba(255,192,0,0.25); border-radius: 2px; }
     </style>
 </head>
 <body>
@@ -94,6 +346,10 @@
             </div>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
+            <div class="search-wrap">
+                <input class="search-input" id="searchInput" type="text" placeholder="Cerca per nome o ISIN…" oninput="filterSearch(this.value)" autocomplete="off" spellcheck="false">
+                <button class="search-clear" id="searchClear" onclick="clearSearch()" title="Cancella ricerca">&times;</button>
+            </div>
             <div class="health-badge" onclick="toggleHealthPanel()" id="healthBadge" title="Clicca per diagnostica">
                 <span class="health-dot grey" id="healthDot"></span>
                 <span id="healthLabel">Verifica...</span>
@@ -117,68 +373,511 @@
         <div class="hp-errors" id="hpErrors"></div>
     </div>
 
+    <!-- Modal Portafoglio -->
+    <div class="modal-overlay" id="portfolioModal" onclick="if(event.target===this)closePortfolioModal()">
+        <div class="modal-box">
+            <h3>&#128200; Aggiungi al Portafoglio</h3>
+            <div class="modal-field">
+                <label>Fondo</label>
+                <input type="text" id="pfFundName" readonly style="color:#aaa;cursor:default;">
+            </div>
+            <div class="modal-field">
+                <label>ISIN</label>
+                <input type="text" id="pfIsin" readonly style="color:#777;cursor:default;font-family:monospace;font-size:0.82em;">
+            </div>
+            <div class="modal-field">
+                <label>Data Acquisto</label>
+                <input type="date" id="pfEntryDate">
+            </div>
+            <div class="modal-field">
+                <label>NAV Acquisto</label>
+                <input type="number" id="pfEntryPrice" step="0.0001" min="0" placeholder="es. 12.3456">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closePortfolioModal()">Annulla</button>
+                <button class="btn-primary" onclick="submitPortfolioEntry()">Aggiungi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Dettaglio Fondo -->
+    <div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
+        <div class="detail-box">
+            <div class="detail-header">
+                <div>
+                    <div class="detail-title" id="detailTitle">-</div>
+                    <div class="detail-isin" id="detailIsin">-</div>
+                </div>
+                <button class="detail-close" onclick="closeDetail()">&times;</button>
+            </div>
+            <div class="detail-body">
+                <!-- Pannelli Portfolio (visibili solo se fondo in portafoglio) -->
+                <div id="pfPanels" style="display:none;">
+                    <div id="pfPerfPanel" class="pf-perf-panel"></div>
+                    <div class="pf-risk-panel"><div class="panel-title">📊 Risk Metrics</div><div id="pfRiskMetrics" class="panel-metrics"></div></div>
+                    <div id="pfTargetPanel" class="pf-target-panel"></div>
+                    <div id="pfEntryPanel" class="pf-entry-panel"></div>
+                </div>
+                <!-- KPI attuali -->
+                <div class="detail-kpis" id="detailKpis"></div>
+                <!-- Signal Purity Panel -->
+                <div id="detailPurityPanel" style="display:none;"></div>
+                <!-- Sentiment -->
+                <div class="sentiment-row" id="detailSentiment"></div>
+                <!-- Selettore giorni + grafico -->
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                    <span style="font-size:0.75em;color:#555;">Storico:</span>
+                    <button class="detail-days-btn active" id="dbtn30" onclick="changeDetailDays(30)">30gg</button>
+                    <button class="detail-days-btn" id="dbtn60" onclick="changeDetailDays(60)">60gg</button>
+                    <button class="detail-days-btn" id="dbtn90" onclick="changeDetailDays(90)">90gg</button>
+                </div>
+                <div class="detail-chart-wrap">
+                    <canvas id="detailChart"></canvas>
+                </div>
+                <!-- Narrativa analisi -->
+                <div id="detailNarrative" class="detail-narrative" style="display:none;"></div>
+                <!-- Tabella storica -->
+                <div class="detail-hist-wrap">
+                    <table class="detail-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th><th>NAV</th><th>%1G</th><th>%1W</th><th>%1M</th>
+                                <th>MM5</th><th>MM20</th><th>MM50</th>
+                                <th>Dist%MM20</th><th>RSI14</th><th>ADX</th><th>MACD Hist</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="page-body">
+
+    <div class="sidebar">
+        <div class="sidebar-title">Gestori</div>
+        <div id="companyFilters"></div>
+    </div>
+
+    <div class="main-area">
+
     <div class="column-header">
         <table>
-            <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-            <tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr>
+            <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
+            <tr><th>Fondo</th><th>Casa / Cat.</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity: fedeltà al benchmark">Fedeltà</th></tr>
         </table>
     </div>
 
     <div class="container">
 
+        <div id="l0Section" class="level-section level-0" style="display:none; margin-bottom:20px;">
+            <div class="level-header"><span>🟠 LIVELLO 0 — Deep Recovery</span><span id="l0Count">0 fondi</span></div>
+            <table class="fund-table level-0-table" style="table-layout:fixed;width:100%;">
+                <colgroup>
+                    <col style="width:26%"><col style="width:10%"><col style="width:5%">
+                    <col style="width:8%"><col style="width:8%"><col style="width:8%">
+                    <col style="width:8%"><col style="width:6%"><col style="width:9%">
+                    <col style="width:12%">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Fondo</th><th>Casa</th><th>Giorni</th>
+                        <th>Entrata €</th><th>Stop Loss</th><th>Prezzo</th>
+                        <th>Perf %</th><th>RSI</th><th>Dist. Picco</th>
+                        <th>Entrato il</th>
+                    </tr>
+                </thead>
+                <tbody id="level0Body"></tbody>
+            </table>
+        </div>
+
+        <div class="legend" style="border-left: 3px solid #FF8F00;">
+            <strong>L0 "Deep Recovery" - Condizioni ENTRATA (4/4 richieste):</strong>
+            1. Contesto: NAV &ge;15% sotto il picco storico disponibile |
+            2. Oversold: RSI(14) &lt; 30 |
+            3. Divergenza: Prezzo fa nuovi minimi, RSI fa minimi pi&ugrave; alti |
+            4. Recupero: RSI &gt; 32 OPPURE micro-breakout +0.3%
+            <br>
+            <strong>Uscita L0:</strong>
+            &alpha;. Stop Loss: NAV &lt; panic_low (minimo ultimi 30gg all'entrata) &nbsp;|&nbsp;
+            &beta;. Bear Trap: RSI &lt; 25 &nbsp;|&nbsp;
+            &gamma;. Promozione: NAV &gt; MM20 &rarr; promosso a L2 &nbsp;|&nbsp;
+            &epsilon;. Timeout: 30 giorni di borsa
+        </div>
         <div class="legend">
-            <strong>L1 "Trend Sicuro" - Condizioni ENTRATA (5/5 richieste):</strong>
-            1. Allineamento: MM20 &gt; MM50 e NAV &gt; MM20 |
-            2. Persistenza: NAV sopra MM20 per 5+ gg consecutivi, slope&uarr; |
-            3. Momentum: RSI 55–65 |
-            4. Distanza: NAV max 2.5% sopra MM20 |
-            5. ADX: ADX(14) &gt; 25 (forza trend)
+            <strong>L1 "Trend Sicuro" - Condizioni ENTRATA (6/6 richieste):</strong>
+            A. Allineamento: MM20 &gt; MM50 e NAV &gt; MM20 |
+            P. Persistenza: NAV sopra MM20 per 5+ gg consecutivi, slope&uarr; |
+            M. Momentum RSI: RSI 55–65 |
+            D. Distanza: NAV max 2.5% sopra MM20 |
+            X. ADX: ADX(14) &gt; 25 (forza trend) |
+            T. Trend breve: NAV oggi &gt; NAV 3 giorni fa
             <br>
             <strong>Uscita L1:</strong>
             A. Stop Loss: NAV &lt; MM20 &nbsp;|&nbsp;
             B. Trailing Stop: MM5 &lt; MM20 &nbsp;|&nbsp;
-            C. Stanchezza: RSI era &gt;75 e piega verso il basso
+            C. Stanchezza: RSI era &gt;75 e piega verso il basso &nbsp;|&nbsp;
+            D. Strutturale: MM20 &lt; MM50 &nbsp;|&nbsp;
+            E. ADX &lt; 25 (solo equity) &nbsp;|&nbsp;
+            F. MM50 non calcolabile
         </div>
 
-        <div class="category-filters" id="categoryFilters"></div>
-
         <div class="level-section level-1">
-            <div class="level-header"><span>LIVELLO 1 - Core Portfolio</span><span id="l1Count">0 fondi</span></div>
-            <table class="fund-table">
-                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
+            <div class="level-header"><span>LIVELLO 1 — Core Portfolio</span><span id="l1Count">0 fondi</span></div>
+            <table class="fund-table l1-table" style="table-layout:fixed;width:100%;">
+                <colgroup>
+                    <col style="width:27%"><col style="width:7%">
+                    <col style="width:6%"><col style="width:6%"><col style="width:6%">
+                    <col style="width:6%"><col style="width:7%">
+                    <col style="width:5%"><col style="width:16%"><col style="width:9%">
+                </colgroup>
+                <thead><tr>
+                    <th>Fondo</th><th>Prezzo</th>
+                    <th>%1G</th><th>%1W</th><th>%1M</th>
+                    <th>Gg L1</th><th>vs Ent.</th>
+                    <th>RSI</th><th>Cond.</th><th title="Fedeltà al benchmark">Fedeltà</th>
+                </tr></thead>
                 <tbody id="level1Body"></tbody>
             </table>
         </div>
 
+        <!-- Sezione usciti da L1 (ultimi 30 gg) -->
+        <div class="l1-exits-section" id="l1ExitsSection" style="display:none;">
+            <div class="l1-exits-header" onclick="toggleL1Exits()">
+                <h3>📤 Usciti da L1 — ultimi 30 giorni</h3>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span id="l1ExitsCount" style="font-size:0.78em;color:#888;">0 uscite</span>
+                    <span id="l1ExitsToggle" style="color:#666;font-size:0.75em;">&#9660;</span>
+                </div>
+            </div>
+            <div id="l1ExitsBody" style="display:none;">
+                <table class="l1-exits-table">
+                    <thead><tr>
+                        <th style="width:27%">Fondo</th>
+                        <th style="width:9%">Entrato il</th>
+                        <th style="width:9%">Uscito il</th>
+                        <th style="width:6%">Gg L1</th>
+                        <th style="width:8%">NAV Ent.</th>
+                        <th style="width:8%">NAV Usc.</th>
+                        <th style="width:7%">Perf %</th>
+                        <th style="width:26%">Motivo uscita</th>
+                    </tr></thead>
+                    <tbody id="l1ExitsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="level-section level-2">
-            <div class="level-header"><span>LIVELLO 2 - Watchlist</span><span id="l2Count">0 fondi</span></div>
+            <div class="level-header"><span>LIVELLO 2 — Watchlist</span><span id="l2Count">0 fondi</span></div>
             <table class="fund-table">
-                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
+                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
+                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity">Fed.</th></tr></thead>
                 <tbody id="level2Body"></tbody>
             </table>
         </div>
 
         <div class="level-section level-3">
-            <div class="level-header"><span>LIVELLO 3 - Universe</span><span id="l3Count">0 fondi</span></div>
+            <div class="level-header"><span>LIVELLO 3 — Universe</span><span id="l3Count">0 fondi</span></div>
             <table class="fund-table">
-                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-                <thead><tr><th>Fondo</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
+                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
+                <thead><tr><th>Fondo</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity">Fed.</th></tr></thead>
                 <tbody id="level3Body"></tbody>
             </table>
         </div>
+
+        <!-- ── Portafoglio Personale ── -->
+        <div class="portfolio-section" id="portfolioSection">
+            <div class="portfolio-header" onclick="togglePortfolioSection()">
+                <h3>&#128200; Portafoglio Personale</h3>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span id="portfolioCount" style="font-size:0.78em;color:#777;">0 fondi</span>
+                    <span id="portfolioToggle" style="color:#555;font-size:0.75em;">&#9660;</span>
+                </div>
+            </div>
+            <div class="portfolio-body" id="portfolioBody" style="display:none;">
+                <div id="portfolioContent">
+                    <div class="portfolio-empty">Nessun fondo nel portafoglio.<br>
+                        <span style="color:#444;">Usa il pulsante <strong style="color:#5A8FD4;">+ Port.</strong> accanto a un fondo per aggiungerlo.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Tabella parametri di riferimento ── -->
+        <div class="param-ref">
+            <div class="param-ref-header" onclick="toggleParamRef()">
+                <h3>&#x1F4CB; Parametri di Riferimento — Profili e Regole di Ingresso/Uscita</h3>
+                <span class="param-ref-toggle" id="paramRefToggle">&#9660;</span>
+            </div>
+            <div class="param-ref-body" id="paramRefBody">
+
+                <!-- ── Azionari ── -->
+                <div class="param-section-title">Classi Azionarie — Parametri L1 "Trend Sicuro"</div>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th style="width:22%">Parametro</th>
+                            <th class="cls-eq-dev"  style="width:19%">&#9670; Equity Sviluppati</th>
+                            <th class="cls-em"      style="width:19%">&#9670; Mercati Emergenti</th>
+                            <th class="cls-sect"    style="width:19%">&#9670; Settoriali / Tematici</th>
+                            <th class="cls-comm"    style="width:21%">&#9670; Materie Prime</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="param-name">Esempi categoria</td>
+                            <td style="color:#666;font-size:0.82em">Europa, USA, Globale</td>
+                            <td style="color:#666;font-size:0.82em">EM, Asia, BRIC</td>
+                            <td style="color:#666;font-size:0.82em">Tech, Healthcare, Real Estate</td>
+                            <td style="color:#666;font-size:0.82em">Oro, Petrolio, Commodities</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">RSI entrata L1</td>
+                            <td class="val-eq">55 – 65</td>
+                            <td class="val-em">55 – 65</td>
+                            <td class="val-sect">54 – 66</td>
+                            <td class="val-comm">54 – 66</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">RSI oversold (L0)</td>
+                            <td class="val-eq">&lt; 30</td>
+                            <td class="val-em">&lt; 30</td>
+                            <td class="val-sect">&lt; 30</td>
+                            <td class="val-comm">&lt; 30</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">Persistenza MM20</td>
+                            <td class="val-eq">5 giorni</td>
+                            <td class="val-em">5 giorni</td>
+                            <td class="val-sect">5 giorni</td>
+                            <td class="val-comm">5 giorni</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">Distanza max MM20</td>
+                            <td class="val-eq">2.5%</td>
+                            <td class="val-em">3.0%</td>
+                            <td class="val-sect">2.5%</td>
+                            <td class="val-comm">3.0%</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">ADX(14) richiesto</td>
+                            <td class="val-eq">&gt; 25</td>
+                            <td class="val-em">&gt; 25</td>
+                            <td class="val-sect">&gt; 25</td>
+                            <td class="val-comm">&gt; 25</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">Bollinger &sigma;</td>
+                            <td class="val-eq">2.0&sigma;</td>
+                            <td class="val-em">2.0&sigma;</td>
+                            <td class="val-sect">2.0&sigma;</td>
+                            <td class="val-comm">2.0&sigma;</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">Regola E (ADX uscita)</td>
+                            <td class="val-eq">S&igrave;</td>
+                            <td class="val-em">S&igrave;</td>
+                            <td class="val-sect">S&igrave;</td>
+                            <td class="val-comm">S&igrave;</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- ── Obbligazionari ── -->
+                <div class="param-section-title" style="margin-top:16px;">Classi Obbligazionarie — Parametri L1 "Trend Sicuro"</div>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th style="width:22%">Parametro</th>
+                            <th class="cls-gov"  style="width:26%">&#9670; Governativi / Monetari</th>
+                            <th class="cls-corp" style="width:26%">&#9670; Corporate IG</th>
+                            <th class="cls-hy"   style="width:26%">&#9670; High Yield / Flessibili / EM Bond</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="param-name">Esempi categoria</td>
+                            <td style="color:#666;font-size:0.82em">Gov, Inflation, Monetari, BT</td>
+                            <td style="color:#666;font-size:0.82em">Corporate, Credit IG</td>
+                            <td style="color:#666;font-size:0.82em">HY, EM Bond, Flessibili, Bilanciati</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">RSI entrata L1</td>
+                            <td class="val-bond">48 – 58</td>
+                            <td class="val-corp">50 – 60</td>
+                            <td class="val-hy">52 – 63</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">RSI oversold (L0)</td>
+                            <td class="val-bond">&lt; 38</td>
+                            <td class="val-corp">&lt; 35</td>
+                            <td class="val-hy">&lt; 33</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">Persistenza MM20</td>
+                            <td class="val-bond">3 giorni</td>
+                            <td class="val-corp">3 giorni</td>
+                            <td class="val-hy">3 giorni</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">Distanza max MM20</td>
+                            <td class="val-bond">1.5%</td>
+                            <td class="val-corp">2.0%</td>
+                            <td class="val-hy">3.0%</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">ADX(14) richiesto</td>
+                            <td class="val-na">No</td>
+                            <td class="val-na">No</td>
+                            <td class="val-na">No</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">Bollinger &sigma;</td>
+                            <td class="val-bond">1.5&sigma;</td>
+                            <td class="val-corp">1.7&sigma;</td>
+                            <td class="val-hy">1.8&sigma;</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name">Regola E (ADX uscita)</td>
+                            <td class="val-na">No</td>
+                            <td class="val-na">No</td>
+                            <td class="val-na">No</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- L1 entrata - 5 condizioni -->
+                <div class="param-section-title" style="margin-top:16px;">L1 "Trend Sicuro" — 5 Condizioni di Entrata (tutte richieste)</div>
+                <table class="param-table">
+                    <tbody>
+                        <tr>
+                            <td class="param-name" style="width:5%"><strong style="color:#fff">1</strong></td>
+                            <td><strong>Allineamento:</strong> MM20 &gt; MM50 e NAV &gt; MM20</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name"><strong style="color:#fff">2</strong></td>
+                            <td><strong>Persistenza:</strong> NAV sopra MM20 per N+ giorni consecutivi con slope&nbsp;&uarr;
+                                &nbsp;<span class="profile-tag eq">5gg azionari</span><span class="profile-tag em">5gg EM</span><span class="profile-tag sect">5gg settoriali</span><span class="profile-tag comm">5gg comm.</span><span class="profile-tag gov">3gg gov</span><span class="profile-tag corp">3gg corp</span><span class="profile-tag hy">3gg HY</span></td>
+                        </tr>
+                        <tr>
+                            <td class="param-name"><strong style="color:#fff">3</strong></td>
+                            <td><strong>Momentum RSI:</strong> RSI(14) nel range target per classe (vedi tabelle sopra)</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name"><strong style="color:#fff">4</strong></td>
+                            <td><strong>Distanza MM20:</strong> NAV non pi&ugrave; di X% sopra MM20 (vedi tabelle sopra)</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name"><strong style="color:#fff">5</strong></td>
+                            <td><strong>Forza trend:</strong> ADX(14) &gt; 25
+                                &nbsp;<span class="profile-tag eq">azionari sviluppati</span><span class="profile-tag em">EM equity</span><span class="profile-tag sect">settoriali</span><span class="profile-tag comm">commodities</span>
+                                &nbsp;<span class="val-na" style="font-size:0.88em">— non applicato a obbligazionari</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- Uscite L1 -->
+                <div class="param-section-title">L1 — Regole di Uscita</div>
+                <div class="exit-grid">
+                    <div class="exit-item exit-l1"><span class="exit-label">A.</span> Stop Loss: NAV &lt; MM20</div>
+                    <div class="exit-item exit-l1"><span class="exit-label">B.</span> Trailing Stop: MM5 &lt; MM20</div>
+                    <div class="exit-item exit-l1"><span class="exit-label">C.</span> Stanchezza: RSI era &gt;75 e piega verso il basso</div>
+                    <div class="exit-item exit-l1"><span class="exit-label">D.</span> Strutturale: MM20 &lt; MM50 (inversione)</div>
+                    <div class="exit-item exit-l1"><span class="exit-label">E.</span> ADX &lt; 25 — <em>solo classi azionarie</em></div>
+                    <div class="exit-item exit-l1"><span class="exit-label">F.</span> MM50 non calcolabile (storico insufficiente)</div>
+                </div>
+
+                <!-- Kill switch -->
+                <div class="param-section-title" style="border-left:3px solid #DC3545;padding-left:8px;border-bottom:none;margin-top:20px;">Kill Switch — Protezione Crolli Anomali</div>
+                <div style="font-size:0.8em;color:#aaa;padding:6px 0 10px;">
+                    Se la variazione giornaliera del NAV &le; <strong style="color:#DC3545;">&minus;3.0%</strong>: tutti i nuovi ingressi L1 e L0 vengono bloccati automaticamente e la sessione viene flaggata per revisione manuale. Le uscite (stop loss) rimangono sempre operative.
+                </div>
+
+                <!-- L0 Deep Recovery -->
+                <div class="param-section-title" style="border-left:3px solid #FF8F00;padding-left:8px;border-bottom:none;margin-top:4px;">L0 "Deep Recovery" — Recupero dopo Forte Deprezzamento</div>
+                <table class="param-table" style="margin-bottom:10px;">
+                    <thead>
+                        <tr>
+                            <th colspan="2" style="color:#FF8F00;font-size:0.9em;">4 Condizioni di Entrata (tutte richieste)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="param-name" style="width:5%"><strong style="color:#fff">1</strong></td>
+                            <td><strong>Contesto:</strong> NAV &ge;15% sotto il picco storico disponibile</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name"><strong style="color:#fff">2</strong></td>
+                            <td><strong>Oversold:</strong> RSI(14) &lt; soglia per classe
+                                &nbsp;<span class="profile-tag eq">&lt;30 az.</span><span class="profile-tag em">&lt;30 EM</span><span class="profile-tag sect">&lt;30 sett.</span><span class="profile-tag comm">&lt;30 comm.</span><span class="profile-tag gov">&lt;38 gov</span><span class="profile-tag corp">&lt;35 corp</span><span class="profile-tag hy">&lt;33 HY</span></td>
+                        </tr>
+                        <tr>
+                            <td class="param-name"><strong style="color:#fff">3</strong></td>
+                            <td><strong>Divergenza:</strong> Prezzo fa nuovi minimi, RSI fa minimi pi&ugrave; alti (divergenza rialzista)</td>
+                        </tr>
+                        <tr>
+                            <td class="param-name"><strong style="color:#fff">4</strong></td>
+                            <td><strong>Recupero:</strong> RSI &gt; 32 <em>oppure</em> micro-breakout +0.3% rispetto al minimo recente</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="exit-grid">
+                    <div class="exit-item exit-l0"><span class="exit-label">&alpha;.</span> Stop Loss: NAV &lt; <em>panic_low</em> (minimo 30gg all'entrata)</div>
+                    <div class="exit-item exit-l0"><span class="exit-label">&beta;.</span> Bear Trap: RSI &lt; 25 (nuovo crollo)</div>
+                    <div class="exit-item exit-l0"><span class="exit-label">&gamma;.</span> Promozione: NAV &gt; MM20 &rarr; passa a L2</div>
+                    <div class="exit-item exit-l0"><span class="exit-label">&epsilon;.</span> Timeout: 30 giorni di borsa senza recupero</div>
+                </div>
+
+            </div><!-- /param-ref-body -->
+        </div><!-- /param-ref -->
+
+    </div><!-- /container -->
+    </div><!-- /main-area -->
+
+    <div class="sidebar-right">
+        <div class="sidebar-title">Categorie</div>
+        <div id="categoryFilters"></div>
     </div>
+
+    </div><!-- /page-body -->
 
     <script>
         let allData = null;
         let activeCategory = 'all';
+        let activeCompany = 'all';
+        let searchQuery = '';
+        let portfolioIsins = new Set();
+        let allFundsMap = {};
+        let portfolioSectionOpen = false;
+        let historyCache = {};
+        let l1TrackingMap = {};   // {isin: {entry_date, entry_price, days_in_l1, pct_gain, is_new}}
+        let l1ExitsData = [];
+        let l1ExitsOpen = false;
+
+        function tradingDays(fromDateStr, toDateStr) {
+            const from = new Date(fromDateStr + 'T00:00:00');
+            const to   = new Date(toDateStr   + 'T00:00:00');
+            let count = 0, d = new Date(from);
+            while (d <= to) { const wd = d.getDay(); if (wd !== 0 && wd !== 6) count++; d.setDate(d.getDate()+1); }
+            return Math.max(1, count);
+        }
 
         async function loadData() {
             try {
-                const response = await fetch('data/dashboard_data.json');
-                allData = await response.json();
+                const [dashRes, l1TrackRes, l1ExitRes] = await Promise.all([
+                    fetch('data/dashboard_data.json'),
+                    fetch('/api/l1-tracking'),
+                    fetch('/api/l1-exits')
+                ]);
+                allData = await dashRes.json();
+                const l1Track = await l1TrackRes.json();
+                const l1Exit  = await l1ExitRes.json();
+                l1TrackingMap = {};
+                (l1Track.tracking || []).forEach(t => { l1TrackingMap[t.isin] = t; });
+                l1ExitsData = l1Exit.exits || [];
                 renderDashboard();
+                renderL1Exits();
             } catch (e) {
                 document.getElementById('lastUpdate').textContent = 'Errore caricamento dati';
                 console.error(e);
@@ -196,15 +895,80 @@
             document.getElementById('holdSignals').textContent = allData.summary.hold_signals;
             document.getElementById('sellSignals').textContent = allData.summary.sell_signals;
 
-            // Category filters
+            // Category filters (sidebar destra)
             const categories = Object.keys(allData.categories || {});
-            const filterHtml = `<button class="cat-btn ${activeCategory==='all'?'active':''}" onclick="filterCategory('all')">Tutti</button>` +
-                categories.map(c => `<button class="cat-btn ${activeCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>`).join('');
+            const filterHtml = `<button class="cat-btn-side all-btn ${activeCategory==='all'?'active':''}" onclick="filterCategory('all')">Tutte</button>` +
+                categories.map(c => {
+                    const safe = c.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    return `<button class="cat-btn-side ${activeCategory===c?'active':''}" onclick="filterCategory('${safe}')" title="${c}">${c}</button>`;
+                }).join('');
             document.getElementById('categoryFilters').innerHTML = filterHtml;
 
-            renderLevel(1, allData.levels['1'] || []);
+            renderCompanyFilters(allData);
+            renderL0(allData.l0_funds || []);
+            renderL1(allData.levels['1'] || []);
             renderLevel(2, allData.levels['2'] || []);
             renderLevel(3, allData.levels['3'] || []);
+        }
+
+        function renderCompanyFilters(data) {
+            const companies = new Set();
+            [1, 2, 3].forEach(l => (data.levels[String(l)] || data.levels[l] || []).forEach(f => { if (f.casa) companies.add(f.casa); }));
+            (data.l0_funds || []).forEach(f => { if (f.casa) companies.add(f.casa); });
+            const sorted = Array.from(companies).sort((a, b) => a.localeCompare(b));
+            const html = `<button class="company-btn all-btn ${activeCompany === 'all' ? 'active' : ''}" onclick="filterCompany('all')">Tutti i gestori</button>` +
+                sorted.map(c => {
+                    const safe = c.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    return `<button class="company-btn ${activeCompany === c ? 'active' : ''}" onclick="filterCompany('${safe}')" title="${c}">${c}</button>`;
+                }).join('');
+            document.getElementById('companyFilters').innerHTML = html;
+        }
+
+        function filterCompany(company) {
+            activeCompany = company;
+            renderDashboard();
+        }
+
+        function renderL0(funds) {
+            const section = document.getElementById('l0Section');
+            const tbody = document.getElementById('level0Body');
+            const countEl = document.getElementById('l0Count');
+            const filtered = (funds || []).filter(f => {
+                const compOk = activeCompany === 'all' || f.casa === activeCompany;
+                return compOk && matchesSearch(f);
+            });
+            if (!filtered || filtered.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+            funds = filtered;
+            section.style.display = 'block';
+            countEl.textContent = `${funds.length} fond${funds.length !== 1 ? 'i' : 'o'}`;
+            tbody.innerHTML = funds.map(f => {
+                const pct = f.pct_gain;
+                const pctCls = pct > 0 ? 'pos' : pct < 0 ? 'neg' : 'zero';
+                const pctStr = pct != null ? (pct > 0 ? '+' : '') + pct.toFixed(2) + '%' : '-';
+                const rsiCls = (f.rsi || 50) < 30 ? 'low' : (f.rsi || 50) > 70 ? 'high' : 'mid';
+                const dist = f.distance_from_peak;
+                const peakDays = f.peak_days ? '/' + f.peak_days + 'gg' : '';
+                const distStr = dist != null ? (dist > 0 ? '+' : '') + dist.toFixed(1) + '%' + peakDays : '-';
+                const distCls = dist != null && dist <= -15 ? 'neg' : 'zero';
+                const priceAboveStop = f.price && f.panic_low && f.price > f.panic_low;
+                const stopStyle = priceAboveStop ? 'color:#888' : 'color:#DC3545;font-weight:bold;text-shadow:0 0 4px #DC3545';
+                const entryDate = f.entry_date ? f.entry_date.substring(0, 10) : '-';
+                return `<tr style="cursor:pointer;" onclick="openFundDetail('${f.isin}')">
+                    <td class="fund-name" title="${f.isin}">${f.nome || '-'}<span class="fund-isin">${f.isin}</span></td>
+                    <td>${f.casa || '-'}</td>
+                    <td style="text-align:center;color:#FF8F00;font-weight:bold;">${f.days_in_l0 || '-'}</td>
+                    <td>${f.entry_price ? f.entry_price.toFixed(4) : '-'}</td>
+                    <td style="${stopStyle}" title="Panic low — stop loss assoluto α">${f.panic_low ? f.panic_low.toFixed(4) : '-'}</td>
+                    <td>${f.price ? f.price.toFixed(4) : '-'}</td>
+                    <td class="pct ${pctCls}">${pctStr}</td>
+                    <td class="rsi ${rsiCls}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
+                    <td class="pct ${distCls}" title="Distanza da MM200">${distStr}</td>
+                    <td style="color:#aaa;font-size:0.85em;">${entryDate}</td>
+                </tr>`;
+            }).join('');
         }
 
         function filterCategory(cat) {
@@ -212,46 +976,223 @@
             renderDashboard();
         }
 
+        function filterSearch(q) {
+            searchQuery = q.trim().toLowerCase();
+            const clearBtn = document.getElementById('searchClear');
+            if (searchQuery) clearBtn.classList.add('visible');
+            else clearBtn.classList.remove('visible');
+            renderDashboard();
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            filterSearch('');
+        }
+
+        function matchesSearch(f) {
+            if (!searchQuery) return true;
+            const name = (f.nome || '').toLowerCase();
+            const isin = (f.isin || '').toLowerCase();
+            return name.includes(searchQuery) || isin.includes(searchQuery);
+        }
+
+        // ── Render L1 — colonne dedicate con badge NUOVO, Gg L1, % vs entrata ──
+        function renderL1(funds) {
+            const filtered = funds.filter(f => {
+                const catOk = activeCategory === 'all' || f.categoria === activeCategory;
+                const compOk = activeCompany === 'all' || f.casa === activeCompany;
+                return catOk && compOk && matchesSearch(f);
+            });
+            filtered.sort((a, b) => (b.buy_count || 0) - (a.buy_count || 0) || (b.rsi || 0) - (a.rsi || 0));
+            const tbody = document.getElementById('level1Body');
+            document.getElementById('l1Count').textContent = `${filtered.length} fondi`;
+            filtered.forEach(f => { if (f.isin) allFundsMap[f.isin] = {nome: f.nome || f.isin, price: f.price || 0}; });
+
+            const today = new Date().toISOString().slice(0,10);
+            const exitRuleNames = {1:'A',2:'B',3:'C',4:'D',5:'E',6:'F'};
+
+            tbody.innerHTML = filtered.map(f => {
+                const isin = f.isin || '';
+                const track = l1TrackingMap[isin] || {};
+                const entryDate = track.entry_date || null;
+                const entryPrice = track.entry_price || null;
+
+                // Giorni in L1 (trading days)
+                const daysInL1 = entryDate ? tradingDays(entryDate, today) : null;
+                const daysColor = !daysInL1 ? '#aaa' : daysInL1 <= 5 ? '#00D060' : daysInL1 <= 15 ? '#FFC000' : '#aaa';
+                const daysHtml = daysInL1
+                    ? `<span style="font-weight:bold;color:${daysColor}">${daysInL1}</span><span style="color:#555;font-size:0.78em"> gg</span>`
+                    : '—';
+
+                // Badge NUOVO (solo gg 1 e 2)
+                const isNew = track.is_new;
+                const nuovoBadge = isNew ? `<span class="badge-nuovo">NUOVO</span>` : '';
+
+                // Avviso uscita imminente (exit_rule già triggherato)
+                const exitRule = f.conditions && f.conditions.exit_rule;
+                const exitWarn = exitRule
+                    ? `<span class="exit-warn" title="Regola ${exitRuleNames[exitRule] || exitRule} attivata — uscita prossima esecuzione">⚠️</span>`
+                    : '';
+
+                // Performance vs entrata
+                const pctVsEnt = track.pct_gain;
+                const pveCls = pctVsEnt > 0 ? 'pos' : pctVsEnt < 0 ? 'neg' : 'zero';
+                const pveStr = pctVsEnt != null
+                    ? `<span class="pct ${pveCls}">${pctVsEnt > 0 ? '+' : ''}${pctVsEnt.toFixed(2)}%</span>`
+                    : '<span style="color:#555">—</span>';
+
+                // RSI
+                const rsiClass = f.rsi < 30 ? 'low' : f.rsi > 70 ? 'high' : 'mid';
+
+                // Purity badge
+                const sp = f.signal_purity;
+                const purityBadge = sp && sp.available
+                    ? `<span class="purity-badge ${sp.color}" title="R²=${Math.round(sp.r2*100)}%  TE=${sp.tracking_error}%  α=${sp.alpha_ann}%&#10;Score ${sp.score}/100 · ${sp.days_used} gg">${sp.label}</span>`
+                    : `<span class="purity-badge grey" title="Dati insufficienti">N/D</span>`;
+
+                // Conditions
+                const c = f.conditions || {};
+                const bc = f.buy_count || 0;
+                const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_momentum_ok?'<span style="color:#0f0" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>':'<span style="color:#555" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>'}</span>`;
+
+                const fmtPct = v => {
+                    if (v == null) return '<td class="pct zero">—</td>';
+                    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+                    return `<td class="pct ${cls}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</td>`;
+                };
+                const inPf = portfolioIsins.has(isin);
+                const pfBtn = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
+
+                return `<tr onclick="openFundDetail('${isin}')">
+                    <td class="fund-name" title="${isin}">${f.nome || isin}${nuovoBadge}${exitWarn}${pfBtn}<span class="fund-isin">${isin}</span></td>
+                    <td>${f.price ? f.price.toFixed(2) : '—'}</td>
+                    ${fmtPct(f.pct_1d)}${fmtPct(f.pct_1w)}${fmtPct(f.pct_1m)}
+                    <td style="text-align:center">${daysHtml}</td>
+                    <td style="text-align:center">${pveStr}</td>
+                    <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '—'}</td>
+                    <td class="buy-count bc${bc}" title="${c.exit_rule?'⚠️ Regola '+exitRuleNames[c.exit_rule]+' attivata':''}">${condHtml}</td>
+                    <td>${purityBadge}</td>
+                </tr>`;
+            }).join('') || `<tr><td colspan="10" class="empty-msg">Nessun fondo in L1</td></tr>`;
+        }
+
+        // ── Render usciti da L1 ────────────────────────────────────────────────
+        function renderL1Exits() {
+            const section = document.getElementById('l1ExitsSection');
+            const countEl = document.getElementById('l1ExitsCount');
+            if (!l1ExitsData || l1ExitsData.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+            section.style.display = 'block';
+            countEl.textContent = `${l1ExitsData.length} uscit${l1ExitsData.length === 1 ? 'a' : 'e'}`;
+
+            const ruleNames = {1:'A — Stop Loss',2:'B — Trailing Stop',3:'C — Stanchezza RSI',4:'D — Strutturale MM',5:'E — ADX debole',6:'F — Storico insuff.'};
+            const tbody = document.getElementById('l1ExitsTableBody');
+            tbody.innerHTML = l1ExitsData.map(e => {
+                const perf = e.pct_gain;
+                const perfCls = perf > 0 ? '#00B050' : perf < 0 ? '#DC3545' : '#aaa';
+                const perfStr = perf != null ? `<span style="font-weight:bold;color:${perfCls}">${perf > 0 ? '+' : ''}${perf.toFixed(2)}%</span>` : '—';
+                const ruleName = ruleNames[e.exit_rule] || (e.exit_rule ? `Regola ${e.exit_rule}` : '—');
+                const trigger = e.exit_trigger ? `<span style="font-size:0.8em;color:#666;display:block;margin-top:2px;">${e.exit_trigger}</span>` : '';
+                return `<tr onclick="openFundDetail('${e.isin}')" style="cursor:pointer;">
+                    <td class="fund-name" title="${e.isin}">${e.fund_name}<span class="fund-isin">${e.isin}</span></td>
+                    <td style="color:#888;font-size:0.85em;">${e.entry_date || '—'}</td>
+                    <td style="color:#888;font-size:0.85em;">${e.exit_date}</td>
+                    <td style="text-align:center;color:#aaa;">${e.days_in_l1 ?? '—'}</td>
+                    <td style="font-family:monospace;font-size:0.85em;">${e.entry_price ? e.entry_price.toFixed(4) : '—'}</td>
+                    <td style="font-family:monospace;font-size:0.85em;">${e.exit_price ? e.exit_price.toFixed(4) : '—'}</td>
+                    <td style="text-align:center;">${perfStr}</td>
+                    <td><span class="exit-rule-badge">${ruleName}</span>${trigger}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function toggleL1Exits() {
+            l1ExitsOpen = !l1ExitsOpen;
+            document.getElementById('l1ExitsBody').style.display = l1ExitsOpen ? 'block' : 'none';
+            document.getElementById('l1ExitsToggle').innerHTML = l1ExitsOpen ? '&#9650;' : '&#9660;';
+        }
+
         function renderLevel(level, funds) {
-            const filtered = activeCategory === 'all' ? funds : funds.filter(f => f.categoria === activeCategory);
-            // Ordina per buy_count decrescente, poi per RSI decrescente
+            const filtered = funds.filter(f => {
+                const catOk = activeCategory === 'all' || f.categoria === activeCategory;
+                const compOk = activeCompany === 'all' || f.casa === activeCompany;
+                return catOk && compOk && matchesSearch(f);
+            });
             filtered.sort((a, b) => (b.buy_count || 0) - (a.buy_count || 0) || (b.rsi || 0) - (a.rsi || 0));
             const tbody = document.getElementById(`level${level}Body`);
             document.getElementById(`l${level}Count`).textContent = `${filtered.length} fondi`;
 
             if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" class="empty-msg">Nessun fondo in questo livello</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" class="empty-msg">Nessun fondo in questo livello</td></tr>`;
                 return;
             }
 
+            filtered.forEach(f => { if (f.isin) allFundsMap[f.isin] = {nome: f.nome || f.isin, price: f.price || 0}; });
+
             tbody.innerHTML = filtered.map(f => {
                 const rsiClass = f.rsi < 30 ? 'low' : f.rsi > 70 ? 'high' : 'mid';
-                const typeTag = f.asset_type === 'bond' ? '<span style="color:#ffb347;font-size:0.7em;" title="Obbligazionario Gov/BT">OBB</span>' :
-                    f.asset_type === 'bond_hy' ? '<span style="color:#e8a0ff;font-size:0.7em;" title="Corporate/Flessibile">CRP</span>' : '';
+                // Tag tipo asset
+                const assetTag = f.asset_type === 'bond_government' ? '<span style="color:#ffb347;font-size:0.68em;margin-left:2px" title="Gov/BT">GOV</span>'
+                    : f.asset_type === 'bond_corporate' ? '<span style="color:#e8a0ff;font-size:0.68em;margin-left:2px" title="Corporate">CRP</span>'
+                    : f.asset_type === 'high_yield' ? '<span style="color:#c896ff;font-size:0.68em;margin-left:2px" title="High Yield">HY</span>'
+                    : f.asset_type === 'money_market' ? '<span style="color:#80d4ff;font-size:0.68em;margin-left:2px" title="Monetario">MM</span>'
+                    : '';
+                // Badge "in procinto" per L2 (5/6 = manca solo 1 condizione)
+                const bc = f.buy_count || 0;
+                let procintoHtml = '';
+                if (level === 2 && bc >= 5) {
+                    procintoHtml = `<span class="badge-procinto p5" title="${bc}/6 condizioni L1 già soddisfatte — manca solo 1">⚡ ${bc}/6</span>`;
+                } else if (level === 2 && bc >= 4) {
+                    procintoHtml = `<span class="badge-procinto p4" title="${bc}/6 condizioni L1 soddisfatte">⚡ ${bc}/6</span>`;
+                }
                 const secondCol = level === 3 ? f.categoria : f.casa;
                 const fmtPct = v => {
-                    if (v == null) return '<td class="pct zero">-</td>';
+                    if (v == null) return '<td class="pct zero">—</td>';
                     const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
-                    const sign = v > 0 ? '+' : '';
-                    return `<td class="pct ${cls}">${sign}${v.toFixed(2)}%</td>`;
+                    return `<td class="pct ${cls}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</td>`;
                 };
+                // Dist% MM20 (sostituisce valore grezzo MM20)
+                const distMM20 = (f.price && f.ma) ? ((f.price - f.ma) / f.ma * 100) : null;
+                const distCls = distMM20 > 0 ? 'pos' : distMM20 < 0 ? 'neg' : 'zero';
+                const distStr = distMM20 != null
+                    ? `<td class="pct ${distCls}" title="Distanza da MM20">${distMM20 > 0 ? '+' : ''}${distMM20.toFixed(1)}%</td>`
+                    : '<td class="pct zero">—</td>';
+                const isin = f.isin || '';
+                const inPf = portfolioIsins.has(isin);
+                const pfBtn = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
+                // Purity badge
+                const sp = f.signal_purity;
+                const purityBadge = sp && sp.available
+                    ? `<span class="purity-badge ${sp.color}" title="R²=${Math.round(sp.r2*100)}%  TE=${sp.tracking_error}%  α=${sp.alpha_ann}%&#10;Score ${sp.score}/100 · ${sp.days_used} gg">${sp.label}</span>`
+                    : `<span class="purity-badge grey" title="Dati insufficienti">N/D</span>`;
+                // Conditions dots
+                const c = f.conditions || {};
+                const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_momentum_ok?'<span style="color:#0f0" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>':'<span style="color:#555" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>'}</span>`;
 
-                return `<tr>
-                    <td class="fund-name" title="${f.isin || ''}">${f.nome || '-'} ${typeTag}<span class="fund-isin">${f.isin || ''}</span></td>
-                    <td>${secondCol || '-'}</td>
-                    <td>${f.price ? f.price.toFixed(2) : '-'}</td>
-                    ${fmtPct(f.pct_1d)}
-                    ${fmtPct(f.pct_1w)}
-                    ${fmtPct(f.pct_1m)}
-                    <td>${f.ma ? f.ma.toFixed(2) : '-'}</td>
-                    <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
-                    <td class="buy-count bc${f.buy_count || 0}" title="${f.conditions ? `Allin:${f.conditions.allineamento_ok?'OK':'NO'} Pers:${f.conditions.persistenza_ok?'OK':'NO'} RSI:${f.conditions.rsi_optimal?'OK':'NO'} Dist:${f.conditions.distance_ok?'OK':'NO'} ADX:${f.conditions.adx_ok?'OK':'NO'}` : ''}">${f.buy_count || 0}/5 ${f.conditions ? `<span class="cond-dots">${f.conditions.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM20>MM50">A</span>':'<span style="color:#555" title="Allineamento MM20>MM50">A</span>'}${f.conditions.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${f.conditions.rsi_optimal?'<span style="color:#0f0" title="Momentum RSI 55-65">M</span>':'<span style="color:#555" title="Momentum RSI 55-65">M</span>'}${f.conditions.distance_ok?'<span style="color:#0f0" title="Distanza <2.5%">D</span>':'<span style="color:#555" title="Distanza <2.5%">D</span>'}${f.conditions.adx_ok?'<span style="color:#0f0" title="ADX>25">X</span>':'<span style="color:#555" title="ADX>25">X</span>'}</span>` : ''}</td>
+                return `<tr onclick="openFundDetail('${isin}')">
+                    <td class="fund-name" title="${isin}">${f.nome || '—'}${assetTag}${procintoHtml}${pfBtn}<span class="fund-isin">${isin}</span></td>
+                    <td style="font-size:0.82em;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${secondCol||''}">${secondCol || '—'}</td>
+                    <td>${f.price ? f.price.toFixed(2) : '—'}</td>
+                    ${fmtPct(f.pct_1d)}${fmtPct(f.pct_1w)}${fmtPct(f.pct_1m)}
+                    ${distStr}
+                    <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '—'}</td>
+                    <td class="buy-count bc${bc}">${condHtml}</td>
+                    <td>${purityBadge}</td>
                 </tr>`;
             }).join('');
         }
 
         function toggleHealthPanel() {
             document.getElementById('healthPanel').classList.toggle('open');
+        }
+
+        function toggleParamRef() {
+            const body = document.getElementById('paramRefBody');
+            const toggle = document.getElementById('paramRefToggle');
+            body.classList.toggle('open');
+            toggle.classList.toggle('open');
         }
 
         // Chiudi pannello cliccando fuori
@@ -326,10 +1267,572 @@
             }
         }
 
+        // ── Portfolio Personale ─────────────────────────────────────────────
+
+        async function loadPortfolio() {
+            try {
+                const res = await fetch('/api/portfolio');
+                const data = await res.json();
+                const pf = data.portfolio || [];
+                portfolioIsins = new Set(pf.map(p => p.isin));
+                document.getElementById('portfolioCount').textContent = pf.length + ' fond' + (pf.length === 1 ? 'o' : 'i');
+                renderPortfolio(pf);
+            } catch(e) {
+                console.error('Portfolio load error', e);
+            }
+        }
+
+        function renderPortfolio(portfolio) {
+            const content = document.getElementById('portfolioContent');
+            if (!portfolio || portfolio.length === 0) {
+                content.innerHTML = '<div class="portfolio-empty">Nessun fondo nel portafoglio.<br><span style="color:#444;">Usa il pulsante <strong style="color:#5A8FD4;">+ Port.</strong> accanto a un fondo per aggiungerlo.</span></div>';
+                return;
+            }
+            content.innerHTML = `<table class="portfolio-table">
+                <thead><tr>
+                    <th style="width:30%">Fondo</th>
+                    <th style="width:10%">Acquisto</th>
+                    <th style="width:9%">NAV Acq.</th>
+                    <th style="width:9%">NAV Att.</th>
+                    <th style="width:9%">Perf %</th>
+                    <th style="width:5%;text-align:center">Liv.</th>
+                    <th style="width:6%;text-align:center">RSI</th>
+                    <th style="width:8%;text-align:center">Dist MM20</th>
+                    <th style="width:7%;text-align:center">Storico</th>
+                    <th style="width:7%;text-align:center">Rimuovi</th>
+                </tr></thead>
+                <tbody id="portfolioTableBody"></tbody>
+            </table>`;
+            const tbody = document.getElementById('portfolioTableBody');
+            tbody.innerHTML = portfolio.map(p => {
+                const perf = p.perf_pct;
+                const perfCls = perf > 0 ? 'pos' : perf < 0 ? 'neg' : 'zero';
+                const perfStr = perf != null ? (perf > 0 ? '+' : '') + perf.toFixed(2) + '%' : '-';
+                const rsiVal = p.rsi != null ? parseFloat(p.rsi).toFixed(0) : '-';
+                const rsiCls = p.rsi < 30 ? 'low' : p.rsi > 70 ? 'high' : 'mid';
+                const distStr = p.dist_mm20 != null ? (p.dist_mm20 > 0 ? '+' : '') + parseFloat(p.dist_mm20).toFixed(1) + '%' : '-';
+                const distCls = p.dist_mm20 > 0 ? 'pos' : p.dist_mm20 < 0 ? 'neg' : 'zero';
+                const navAtt = p.current_nav != null ? parseFloat(p.current_nav).toFixed(4) : '-';
+                const navAcq = p.entry_price != null ? parseFloat(p.entry_price).toFixed(4) : '-';
+                const lv = p.level;
+                const levBadge = lv ? `<span style="font-weight:bold;color:${lv===1?'#00B050':lv===2?'#FFC000':'#5A8FD4'}">L${lv}</span>` : '-';
+                const isin = p.isin;
+                return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openFundDetail('${isin}',{entry_price:${p.entry_price},entry_date:'${p.entry_date}'})">
+                    <td class="fund-name" title="${isin}">${p.fund_name || isin}<span class="fund-isin">${isin}</span></td>
+                    <td style="color:#888;font-size:0.83em;">${p.entry_date || '-'}</td>
+                    <td style="font-family:monospace;font-size:0.85em;">${navAcq}</td>
+                    <td style="font-family:monospace;font-size:0.85em;">${navAtt}</td>
+                    <td><span class="perf-badge ${perfCls}">${perfStr}</span></td>
+                    <td style="text-align:center;">${levBadge}</td>
+                    <td class="rsi ${rsiCls}" style="text-align:center;">${rsiVal}</td>
+                    <td class="pct ${distCls}" style="text-align:center;font-size:0.88em;">${distStr}</td>
+                    <td style="text-align:center;"><button class="btn-toggle-hist" onclick="event.stopPropagation();toggleFundHistory('${isin}')" id="btn-hist-${isin}">&#9660; 30gg</button></td>
+                    <td style="text-align:center;"><button class="btn-remove" onclick="event.stopPropagation();removeFromPortfolio('${isin}')" title="Rimuovi dal portafoglio">&#10005;</button></td>
+                </tr>
+                <tr class="history-row" id="pf-hist-${isin}" style="display:none;">
+                    <td colspan="10"><div id="hist-wrap-${isin}" style="padding:12px;color:#555;text-align:center;font-size:0.8em;">Caricamento...</div></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function togglePortfolioSection() {
+            portfolioSectionOpen = !portfolioSectionOpen;
+            document.getElementById('portfolioBody').style.display = portfolioSectionOpen ? 'block' : 'none';
+            document.getElementById('portfolioToggle').innerHTML = portfolioSectionOpen ? '&#9650;' : '&#9660;';
+            if (portfolioSectionOpen) loadPortfolio();
+        }
+
+        async function toggleFundHistory(isin) {
+            const histRow = document.getElementById('pf-hist-' + isin);
+            const btn = document.getElementById('btn-hist-' + isin);
+            const isOpen = histRow.style.display !== 'none';
+            if (isOpen) {
+                histRow.style.display = 'none';
+                btn.innerHTML = '&#9660; 30gg';
+                return;
+            }
+            histRow.style.display = 'table-row';
+            btn.innerHTML = '&#9650; Chiudi';
+            if (historyCache[isin]) { renderHistory(isin, historyCache[isin]); return; }
+            try {
+                const res = await fetch('/api/portfolio-history/' + isin);
+                const data = await res.json();
+                historyCache[isin] = data.history || [];
+                renderHistory(isin, historyCache[isin]);
+            } catch(e) {
+                document.getElementById('hist-wrap-' + isin).innerHTML = '<div style="color:#DC3545;">Errore caricamento storico</div>';
+            }
+        }
+
+        function renderHistory(isin, history) {
+            const wrap = document.getElementById('hist-wrap-' + isin);
+            if (!history || history.length === 0) {
+                wrap.innerHTML = '<div style="padding:12px;color:#555;text-align:center;font-size:0.8em;">Nessun dato storico disponibile.<br>Avvia il backfill per raccogliere lo storico prezzi.</div>';
+                return;
+            }
+            const rows = [...history].reverse(); // decrescente per data
+            const fmtPct = v => {
+                if (v == null) return '<td style="color:#444;">—</td>';
+                const cls = v > 0 ? 'color:#00B050' : v < 0 ? 'color:#DC3545' : 'color:#888';
+                const sign = v > 0 ? '+' : '';
+                return `<td style="${cls}">${sign}${v.toFixed(2)}%</td>`;
+            };
+            wrap.innerHTML = `<table class="history-table">
+                <thead><tr><th>Data</th><th>NAV</th><th>&#916;1G%</th><th>&#916;1W%</th><th>MM5</th><th>MM20</th><th>Dist MM20%</th><th>RSI14</th></tr></thead>
+                <tbody>${rows.map(r => {
+                    const rsiCls = r.rsi14 < 30 ? 'color:#00B050' : r.rsi14 > 70 ? 'color:#DC3545' : 'color:#FFC000';
+                    return `<tr>
+                        <td>${r.date}</td>
+                        <td>${r.nav != null ? r.nav.toFixed(4) : '—'}</td>
+                        ${fmtPct(r.pct_1g)}
+                        ${fmtPct(r.pct_1w)}
+                        <td>${r.mm5 != null ? r.mm5.toFixed(4) : '—'}</td>
+                        <td>${r.mm20 != null ? r.mm20.toFixed(4) : '—'}</td>
+                        ${fmtPct(r.dist_mm20)}
+                        <td style="${rsiCls};font-weight:bold;">${r.rsi14 != null ? r.rsi14.toFixed(0) : '—'}</td>
+                    </tr>`;
+                }).join('')}</tbody>
+            </table>`;
+        }
+
+        function openPortfolioModal(isin) {
+            const fund = allFundsMap[isin] || {};
+            document.getElementById('pfIsin').value = isin;
+            document.getElementById('pfFundName').value = fund.nome || isin;
+            document.getElementById('pfEntryDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('pfEntryPrice').value = fund.price ? fund.price.toFixed(4) : '';
+            document.getElementById('portfolioModal').classList.add('open');
+            setTimeout(() => document.getElementById('pfEntryPrice').focus(), 100);
+        }
+
+        function closePortfolioModal() {
+            document.getElementById('portfolioModal').classList.remove('open');
+        }
+
+        async function submitPortfolioEntry() {
+            const isin = document.getElementById('pfIsin').value;
+            const fundName = document.getElementById('pfFundName').value;
+            const entryDate = document.getElementById('pfEntryDate').value;
+            const entryPrice = parseFloat(document.getElementById('pfEntryPrice').value);
+            if (!isin || !entryDate || isNaN(entryPrice) || entryPrice <= 0) {
+                alert('Compila tutti i campi correttamente (NAV deve essere > 0)');
+                return;
+            }
+            try {
+                const res = await fetch('/api/portfolio', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({isin, entry_date: entryDate, entry_price: entryPrice, fund_name: fundName})
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    closePortfolioModal();
+                    portfolioIsins.add(isin);
+                    historyCache = {};
+                    renderDashboard();
+                    if (!portfolioSectionOpen) togglePortfolioSection();
+                    else loadPortfolio();
+                } else {
+                    alert('Errore: ' + (data.error || 'Errore sconosciuto'));
+                }
+            } catch(e) {
+                alert('Errore di rete: ' + e.message);
+            }
+        }
+
+        async function removeFromPortfolio(isin) {
+            if (!confirm('Rimuovere ' + (allFundsMap[isin]?.nome || isin) + ' dal portafoglio?')) return;
+            try {
+                const res = await fetch('/api/portfolio/' + isin, {method: 'DELETE'});
+                if (res.ok) {
+                    portfolioIsins.delete(isin);
+                    delete historyCache[isin];
+                    renderDashboard();
+                    loadPortfolio();
+                }
+            } catch(e) { alert('Errore: ' + e.message); }
+        }
+
+        // ── Fund Detail Modal ───────────────────────────────────────────────
+        let detailChart = null;
+        let currentDetailIsin = null;
+        let currentDetailDays = 30;
+        let currentEntryData = null;
+        let detailCache = {};
+
+        async function openFundDetail(isin, entryData = null) {
+            if (!isin) return;
+            currentDetailIsin = isin;
+            currentDetailDays = 30;
+            currentEntryData = entryData || null;
+            document.getElementById('detailOverlay').classList.add('open');
+            // Titolo: cerca sia nei fondi della dashboard che nel portafoglio
+            const fundName = allFundsMap[isin]?.nome || (portfolioIsins.has(isin) ? isin : isin);
+            document.getElementById('detailTitle').textContent = fundName;
+            document.getElementById('detailIsin').textContent = isin;
+            document.getElementById('detailKpis').innerHTML = '<span style="color:#555;font-size:0.8em;">Caricamento...</span>';
+            document.getElementById('detailSentiment').innerHTML = '';
+            document.getElementById('detailTableBody').innerHTML = '';
+            document.getElementById('pfPanels').style.display = 'none';
+            document.getElementById('detailNarrative').style.display = 'none';
+            document.getElementById('detailPurityPanel').style.display = 'none';
+            [30,60,90].forEach(d => document.getElementById('dbtn'+d).classList.toggle('active', d===30));
+            await loadFundDetail(isin, 30);
+        }
+
+        function closeDetail() {
+            document.getElementById('detailOverlay').classList.remove('open');
+            if (detailChart) { detailChart.destroy(); detailChart = null; }
+            currentEntryData = null;
+        }
+
+        async function changeDetailDays(days) {
+            currentDetailDays = days;
+            [30,60,90].forEach(d => document.getElementById('dbtn'+d).classList.toggle('active', d===days));
+            await loadFundDetail(currentDetailIsin, days);
+        }
+
+        async function loadFundDetail(isin, days) {
+            let url = '/api/fund-detail/' + isin + '?days=' + days;
+            if (currentEntryData) {
+                url += '&entry_price=' + currentEntryData.entry_price + '&entry_date=' + currentEntryData.entry_date;
+            }
+            const key = url;
+            let data = detailCache[key];
+            if (!data) {
+                try {
+                    const res = await fetch(url);
+                    data = await res.json();
+                    if (!data.error) detailCache[key] = data;
+                } catch(e) {
+                    document.getElementById('detailKpis').innerHTML = '<span style="color:#DC3545;">Errore caricamento dati</span>';
+                    return;
+                }
+            }
+            if (data.error) {
+                document.getElementById('detailKpis').innerHTML = '<span style="color:#888;">' + data.error + '</span>';
+                return;
+            }
+            if (data.portfolio_analysis && !data.portfolio_analysis.error) {
+                renderPortfolioPanels(data.portfolio_analysis, data.current);
+            }
+            renderDetailKpis(data);
+            renderPurityPanel(data.signal_purity, data.asset_type);
+            renderDetailSentiment(data.sentiment);
+            renderDetailChart(data.history, data.portfolio_analysis);
+            renderDetailTable(data.history);
+            renderAnalysisNarrative(data);
+        }
+
+        function renderPurityPanel(sp, assetType) {
+            const el = document.getElementById('detailPurityPanel');
+            if (!sp || !sp.available) { el.style.display = 'none'; return; }
+
+            const BENCHMARK_LABELS = {
+                'equity_developed': 'IWDA.L — MSCI World',
+                'emerging_markets': 'EIMI.L — MSCI EM',
+                'sector_thematic':  'IWDA.L — MSCI World (proxy)',
+                'commodities':      'CMOD.L — Diversified Commodity',
+                'money_market':     'XEON.L — EUR Overnight Rate (ESTER)',
+                'bond_government':  'XGLE.L — Eurozone Govt Bond',
+                'bond_corporate':   'IEAA.L — EUR Corporate Bond',
+                'high_yield':       'IHYG.L — EUR High Yield',
+            };
+            const bmLabel = BENCHMARK_LABELS[assetType] || assetType || '—';
+            const colMap = { green:'#00B050', yellow:'#FFC000', red:'#DC3545' };
+            const col = colMap[sp.color] || '#888';
+            const r2pct = Math.round(sp.r2 * 100);
+            const r2Color = r2pct >= 85 ? 'green' : r2pct >= 70 ? 'yellow' : 'red';
+            const teColor = sp.tracking_error <= 5 ? 'green' : sp.tracking_error <= 10 ? 'yellow' : 'red';
+            const alphaColor = sp.alpha_ann > 0 ? 'green' : 'red';
+
+            el.innerHTML = `
+                <div class="purity-panel ${sp.color}">
+                    <div class="pp-title" style="color:${col}">
+                        <span class="purity-dot ${sp.color}" style="margin-right:6px;"></span>
+                        Fedeltà al Benchmark: <strong>${sp.label}</strong>
+                        <span style="color:#666;font-size:0.85em;margin-left:6px;">(${sp.score}/100 · ${sp.days_used}gg)</span>
+                    </div>
+                    <div class="purity-metric">
+                        <div class="pm-val ${r2Color}">${r2pct}%</div>
+                        <div class="pm-label">R² — spiegato</div>
+                    </div>
+                    <div class="purity-metric">
+                        <div class="pm-val ${teColor}">${sp.tracking_error}%</div>
+                        <div class="pm-label">Tracking Error ann.</div>
+                    </div>
+                    <div class="purity-metric">
+                        <div class="pm-val ${alphaColor}">${sp.alpha_ann > 0 ? '+' : ''}${sp.alpha_ann}%</div>
+                        <div class="pm-label">Alpha ann. vs bmk</div>
+                    </div>
+                    <div class="purity-metric">
+                        <div class="pm-val" style="color:#aaa;">${sp.beta}</div>
+                        <div class="pm-label">Beta</div>
+                    </div>
+                    <div class="purity-benchmark">vs ${bmLabel}</div>
+                </div>`;
+            el.style.display = 'block';
+        }
+
+        function renderDetailKpis(data) {
+            const c = data.current || {};
+            const fmtPct = v => v != null ? (v > 0 ? '+' : '') + v.toFixed(1) + '%' : '—';
+            const rsiColor = (c.rsi14||50) < 35 ? '#00B050' : (c.rsi14||50) > 65 ? '#DC3545' : '#FFC000';
+            const distColor = (c.dist_mm20||0) >= 0 ? '#00B050' : '#DC3545';
+            const lvMap = {1:'#00B050', 2:'#FFC000', 3:'#4472C4', 0:'#FF8F00'};
+            const lvColor = lvMap[data.level] || '#888';
+            document.getElementById('detailKpis').innerHTML = `
+                <div class="kpi-box"><div class="kpi-label">Livello</div><div class="kpi-value" style="color:${lvColor}">L${data.level ?? '?'}</div></div>
+                <div class="kpi-box"><div class="kpi-label">NAV</div><div class="kpi-value">${c.nav != null ? c.nav.toFixed(4) : '—'}</div></div>
+                <div class="kpi-box"><div class="kpi-label">RSI 14</div><div class="kpi-value" style="color:${rsiColor}">${c.rsi14 != null ? c.rsi14.toFixed(0) : '—'}</div></div>
+                <div class="kpi-box"><div class="kpi-label">ADX 14</div><div class="kpi-value">${c.adx != null ? c.adx.toFixed(0) : '—'}</div></div>
+                <div class="kpi-box"><div class="kpi-label">MM20</div><div class="kpi-value">${c.mm20 != null ? c.mm20.toFixed(4) : '—'}</div></div>
+                <div class="kpi-box"><div class="kpi-label">MM50</div><div class="kpi-value" style="color:#888">${c.mm50 != null ? c.mm50.toFixed(4) : '—'}</div></div>
+                <div class="kpi-box"><div class="kpi-label">Dist MM20</div><div class="kpi-value" style="color:${distColor}">${fmtPct(c.dist_mm20)}</div></div>
+                <div class="kpi-box"><div class="kpi-label">Dist 52W Max</div><div class="kpi-value" style="color:${(data.dist_52w||0) > -10 ? '#00B050' : '#DC3545'}">${fmtPct(data.dist_52w)}</div></div>
+            `;
+        }
+
+        function renderDetailSentiment(sentiment) {
+            if (!sentiment) return;
+            const colorMap = {green:'#00B050', yellow:'#FFC000', red:'#DC3545'};
+            const icons = {COMPRA:'▲', MANTIENI:'■', VENDI:'▼'};
+            document.getElementById('detailSentiment').innerHTML = ['short','mid','long'].map(k => {
+                const s = sentiment[k];
+                const ic = icons[s.verdict] || '■';
+                const col = colorMap[s.color] || '#888';
+                const factors = (s.factors||[]).map(f => `<li>${f}</li>`).join('');
+                return `<div class="sent-box ${s.color}">
+                    <div class="sent-label">${s.label}</div>
+                    <div class="sent-verdict" style="color:${col}">${ic} ${s.verdict}</div>
+                    <ul class="sent-factors">${factors}</ul>
+                </div>`;
+            }).join('');
+        }
+
+        function renderDetailChart(history, pa) {
+            if (detailChart) { detailChart.destroy(); detailChart = null; }
+            const ctx = document.getElementById('detailChart').getContext('2d');
+            const labels = history.map(r => r.date);
+            const navs   = history.map(r => r.nav);
+            const mm20s  = history.map(r => r.mm20);
+            const mm50s  = history.map(r => r.mm50);
+
+            // Indice della data di acquisto nello storico
+            const entryDate = pa?.entry_date || null;
+            const entryPrice = pa?.entry_price || null;
+            const entryIdx = entryDate ? labels.findIndex(l => l >= entryDate) : -1;
+
+            // Plugin inline per disegnare la linea verticale di acquisto
+            const entryLinePlugin = {
+                id: 'entryLine',
+                afterDraw(chart) {
+                    if (entryIdx < 0 || !entryPrice) return;
+                    const { ctx: c, scales: { x, y } } = chart;
+                    const xPos = x.getPixelForValue(entryIdx);
+                    c.save();
+                    c.strokeStyle = '#00FF88';
+                    c.lineWidth = 1.5;
+                    c.setLineDash([5, 4]);
+                    c.globalAlpha = 0.7;
+                    c.beginPath();
+                    c.moveTo(xPos, y.top);
+                    c.lineTo(xPos, y.bottom);
+                    c.stroke();
+                    // Etichetta prezzo acquisto
+                    c.setLineDash([]);
+                    c.globalAlpha = 1;
+                    c.fillStyle = '#00FF88';
+                    c.font = 'bold 10px sans-serif';
+                    c.textAlign = 'left';
+                    const label = '✦ ' + entryPrice.toFixed(4);
+                    const yPos = y.getPixelForValue(entryPrice);
+                    if (yPos > y.top && yPos < y.bottom) {
+                        c.fillText(label, xPos + 4, yPos - 3);
+                    }
+                    c.restore();
+                }
+            };
+
+            detailChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'NAV',  data: navs,  borderColor: '#5A8FD4', borderWidth: 2,   pointRadius: 0, tension: 0.3, fill: false },
+                        { label: 'MM20', data: mm20s, borderColor: '#FFC000', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false, borderDash: [4,3] },
+                        { label: 'MM50', data: mm50s, borderColor: '#FF8C42', borderWidth: 1,   pointRadius: 0, tension: 0.3, fill: false, borderDash: [6,4] },
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { labels: { color: '#888', font: { size: 11 }, boxWidth: 24 } },
+                        tooltip: { backgroundColor: 'rgba(10,15,30,0.92)', titleColor: '#ccc', bodyColor: '#aaa' }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#555', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                },
+                plugins: [entryLinePlugin]
+            });
+        }
+
+        function renderPortfolioPanels(pa, curr) {
+            document.getElementById('pfPanels').style.display = 'block';
+
+            const fp = (v, d=2, sign=true) => {
+                if (v == null) return '<span style="color:#444">—</span>';
+                const s = sign && v > 0 ? '+' : '';
+                return s + v.toFixed(d) + '%';
+            };
+            const fn = (v, d=4) => v != null ? v.toFixed(d) : '—';
+            const colPnl = (pa.pnl_pct || 0) >= 0 ? '#00B050' : '#DC3545';
+
+            // ── Performance ──
+            document.getElementById('pfPerfPanel').innerHTML = `
+                <div class="panel-title">💼 Performance Portafoglio</div>
+                <div class="panel-metrics">
+                    <div class="pm"><div class="pm-lbl">NAV Acquisto</div><div class="pm-val">${fn(pa.entry_price)}</div></div>
+                    <div class="pm"><div class="pm-lbl">Data Acquisto</div><div class="pm-val" style="color:#888;font-size:0.8em;">${pa.entry_date || '—'}</div></div>
+                    <div class="pm"><div class="pm-lbl">NAV Attuale</div><div class="pm-val">${fn(curr?.nav)}</div></div>
+                    <div class="pm"><div class="pm-lbl">P&amp;L %</div><div class="pm-val" style="color:${colPnl};font-size:1.1em;">${fp(pa.pnl_pct)}</div></div>
+                    <div class="pm"><div class="pm-lbl">Giorni in Port.</div><div class="pm-val">${pa.days_held ?? '—'}</div></div>
+                    <div class="pm"><div class="pm-lbl">Rend. Annualizzato</div><div class="pm-val" style="color:${(pa.annualized_return||0)>=0?'#5A8FD4':'#DC3545'}">${pa.annualized_return != null ? fp(pa.annualized_return) : '—'}</div></div>
+                </div>`;
+
+            // ── Risk ──
+            document.getElementById('pfRiskMetrics').innerHTML = `
+                <div class="pm"><div class="pm-lbl">Volatilità 30gg</div><div class="pm-val" style="color:#FFC000;">${pa.volatility_30d != null ? pa.volatility_30d.toFixed(2) + '%/gg' : '—'}</div></div>
+                <div class="pm"><div class="pm-lbl">Max Drawdown (dal tuo ingresso)</div><div class="pm-val" style="color:#DC3545;">${pa.max_drawdown_entry != null ? pa.max_drawdown_entry.toFixed(2) + '%' : '—'}</div></div>
+                <div class="pm"><div class="pm-lbl">Media Var. Giornaliera</div><div class="pm-val">${pa.avg_daily_change != null ? (pa.avg_daily_change > 0 ? '+' : '') + pa.avg_daily_change.toFixed(2) + '%' : '—'}</div></div>`;
+
+            // ── Stop / Target ──
+            document.getElementById('pfTargetPanel').innerHTML = `
+                <div class="panel-title">🎯 Stop Loss &amp; Take Profit</div>
+                <div class="target-grid">
+                    <div class="tg-item stop"><div class="tg-lbl">Stop MM20</div><div class="tg-val">${fn(pa.stop_mm20)}</div></div>
+                    <div class="tg-item t5" ><div class="tg-lbl">Target +5%</div><div class="tg-val">${fn(pa.target_5pct)}</div></div>
+                    <div class="tg-item t10"><div class="tg-lbl">Target +10%</div><div class="tg-val">${fn(pa.target_10pct)}</div></div>
+                    <div class="tg-item t15"><div class="tg-lbl">Target +15%</div><div class="tg-val">${fn(pa.target_15pct)}</div></div>
+                </div>
+                <div style="font-size:0.68em;color:#444;margin-top:6px;">Stop -5% dal prezzo acquisto: <strong style="color:#DC3545;">${fn(pa.stop_5pct)}</strong></div>`;
+
+            // ── Analisi Entrata ──
+            const entRsi = pa.entry_rsi;
+            const entDist = pa.entry_dist_mm20;
+            const entryQual = !entRsi ? 'Non disponibile' :
+                entRsi < 35  ? '🟢 Ottima — RSI in zona ipervenduto, entrata contrarian ideale' :
+                entRsi < 50  ? '🟢 Buona — RSI neutro-basso, buona base di partenza' :
+                entRsi < 60  ? '🟡 Nella norma — RSI equilibrato al momento dell\'acquisto' :
+                entRsi < 70  ? '🟠 Calda — RSI elevato, entrata in zona di momentum' :
+                               '🔴 Rischiosa — RSI in ipercomprato al momento dell\'acquisto';
+            document.getElementById('pfEntryPanel').innerHTML = `
+                <div class="panel-title">🔍 Analisi Qualità Entrata</div>
+                <div class="panel-metrics" style="gap:8px 24px;">
+                    <div class="pm"><div class="pm-lbl">RSI al momento acquisto</div><div class="pm-val" style="color:#FF8C42;">${entRsi != null ? entRsi.toFixed(0) : '—'}</div></div>
+                    <div class="pm"><div class="pm-lbl">Dist. MM20 all'acquisto</div><div class="pm-val" style="color:#FF8C42;">${entDist != null ? (entDist > 0 ? '+' : '') + entDist.toFixed(1) + '%' : '—'}</div></div>
+                    <div class="pm"><div class="pm-lbl">RSI Attuale</div><div class="pm-val">${curr?.rsi14 != null ? curr.rsi14.toFixed(0) : '—'}</div></div>
+                    <div class="pm"><div class="pm-lbl">Dist. MM20 Attuale</div><div class="pm-val">${curr?.dist_mm20 != null ? (curr.dist_mm20 > 0 ? '+' : '') + curr.dist_mm20.toFixed(1) + '%' : '—'}</div></div>
+                </div>
+                <div style="margin-top:8px;font-size:0.75em;color:#bbb;">${entryQual}</div>`;
+        }
+
+        function renderAnalysisNarrative(data) {
+            const el = document.getElementById('detailNarrative');
+            const c = data.current || {};
+            const s = data.sentiment || {};
+            const pa = data.portfolio_analysis;
+            const fname = data.fund_name || data.isin;
+
+            const lvNames = {1:'Core Portfolio (L1)', 2:'Watchlist (L2)', 3:'Universe (L3)', 0:'Deep Recovery (L0)'};
+            const vIco = {COMPRA:'▲', MANTIENI:'■', VENDI:'▼'};
+            const vCol = {COMPRA:'#00B050', MANTIENI:'#FFC000', VENDI:'#DC3545'};
+            const sv = s.short?.verdict, mv = s.mid?.verdict, lv_v = s.long?.verdict;
+            const fp = (v, d=1) => v != null ? (v > 0 ? '+' : '') + v.toFixed(d) + '%' : '—';
+
+            let html = `<div class="nar-title">📋 Analisi Completa — ${fname}</div>`;
+
+            // Posizione tecnica
+            const distDesc = (c.dist_mm20 || 0) >= 0
+                ? `<strong style="color:#00B050">${fp(c.dist_mm20)} sopra</strong> la MM20`
+                : `<strong style="color:#DC3545">${fp(c.dist_mm20)} sotto</strong> la MM20`;
+            const mm20VsMm50 = c.mm20 && c.mm50
+                ? (c.mm20 > c.mm50 ? '<strong style="color:#00B050">MM20 sopra MM50</strong> — allineamento rialzista' : '<strong style="color:#DC3545">MM20 sotto MM50</strong> — allineamento ribassista')
+                : 'MM50 non ancora calcolabile';
+            html += `<p>Il fondo si trova in <strong>${lvNames[data.level] || 'Livello ?'}</strong>. Il NAV (<strong>${c.nav?.toFixed(4) || '—'}</strong>) è ${distDesc} (${c.mm20?.toFixed(4) || '—'}). ${mm20VsMm50}.</p>`;
+
+            // RSI & ADX
+            const rsiDesc = (c.rsi14 || 50) < 35 ? 'ipervenduto (potenziale rimbalzo)'
+                : (c.rsi14 || 50) < 45 ? 'in zona di debolezza'
+                : (c.rsi14 || 50) <= 65 ? 'in zona di salute (45–65)'
+                : (c.rsi14 || 50) <= 75 ? 'in zona calda'
+                : 'ipercomprato';
+            const adxDesc = (c.adx || 0) > 30 ? 'trend forte e strutturato'
+                : (c.adx || 0) > 20 ? 'trend presente ma moderato'
+                : 'mercato senza trend chiaro (laterale)';
+            html += `<p>RSI14 a <strong>${c.rsi14?.toFixed(0) || '—'}</strong>: ${rsiDesc}. ADX14 a <strong>${c.adx?.toFixed(0) || '—'}</strong>: ${adxDesc}. NAV a <strong>${fp(data.dist_52w)}</strong> dal massimo 52 settimane.</p>`;
+
+            // Sentiment
+            html += `<hr class="nar-sep"><p><strong>Segnali per orizzonte temporale:</strong></p>`;
+            html += `<p>
+                <span style="color:${vCol[sv]};font-weight:bold;">${vIco[sv]} ${sv}</span> — <em>Breve (1–2 sett.):</em> ${s.short?.factors?.join('; ') || '—'}<br>
+                <span style="color:${vCol[mv]};font-weight:bold;">${vIco[mv]} ${mv}</span> — <em>Medio (1–3 mesi):</em> ${s.mid?.factors?.join('; ') || '—'}<br>
+                <span style="color:${vCol[lv_v]};font-weight:bold;">${vIco[lv_v]} ${lv_v}</span> — <em>Lungo (6–12 mesi):</em> ${s.long?.factors?.join('; ') || '—'}
+            </p>`;
+
+            // Sezione portafoglio
+            if (pa && !pa.error) {
+                const colPnl = (pa.pnl_pct || 0) >= 0 ? '#00B050' : '#DC3545';
+                html += `<hr class="nar-sep"><p><strong>Il tuo investimento:</strong> acquistato a <strong>${pa.entry_price?.toFixed(4) || '—'}</strong> il ${pa.entry_date || '—'} (${pa.days_held} giorni fa). Performance attuale: <strong style="color:${colPnl}">${fp(pa.pnl_pct)}</strong>${pa.annualized_return != null ? `, rendimento annualizzato stimato: <strong>${fp(pa.annualized_return)}</strong>` : ''}.`;
+                if (pa.entry_rsi != null) {
+                    const eq = pa.entry_rsi < 40 ? 'ottima (RSI oversold)' : pa.entry_rsi < 55 ? 'buona (RSI neutro)' : pa.entry_rsi < 65 ? 'nella norma' : 'in zona calda (RSI elevato)';
+                    html += ` Qualità entrata <strong>${eq}</strong>: RSI era ${pa.entry_rsi.toFixed(0)}, NAV era ${pa.entry_dist_mm20 != null ? (pa.entry_dist_mm20 > 0 ? '+' : '') + pa.entry_dist_mm20.toFixed(1) + '% rispetto a MM20' : '—'}.`;
+                }
+                html += `</p>`;
+                html += `<p>Volatilità 30gg: <strong>${pa.volatility_30d != null ? pa.volatility_30d.toFixed(2) + '%/gg' : '—'}</strong>. Peggior drawdown dal tuo ingresso: <strong style="color:#DC3545">${pa.max_drawdown_entry != null ? pa.max_drawdown_entry.toFixed(2) + '%' : '—'}</strong>. Stop loss consigliato: MM20 a <strong>${pa.stop_mm20 || '—'}</strong> oppure -5% a <strong>${pa.stop_5pct?.toFixed(4) || '—'}</strong>. Take profit: +5% a ${pa.target_5pct?.toFixed(4) || '—'} | +10% a ${pa.target_10pct?.toFixed(4) || '—'} | +15% a ${pa.target_15pct?.toFixed(4) || '—'}.</p>`;
+            }
+
+            el.innerHTML = html;
+            el.style.display = 'block';
+        }
+
+        function renderDetailTable(history) {
+            const rows = [...history].reverse();
+            const fp = (v, d=2) => {
+                if (v == null) return '<td style="color:#333;">—</td>';
+                const c = v > 0 ? 'color:#00B050' : v < 0 ? 'color:#DC3545' : 'color:#888';
+                return `<td style="${c}">${(v > 0 ? '+' : '') + v.toFixed(d)}%</td>`;
+            };
+            const fn = (v, d=4) => v != null ? `<td>${v.toFixed(d)}</td>` : '<td style="color:#333;">—</td>';
+            document.getElementById('detailTableBody').innerHTML = rows.map(r => {
+                const rsiC = (r.rsi14||50) < 35 ? 'color:#00B050' : (r.rsi14||50) > 65 ? 'color:#DC3545' : 'color:#FFC000';
+                const mhC  = (r.macd_hist||0) > 0 ? 'color:#00B050' : 'color:#DC3545';
+                return `<tr>
+                    <td>${r.date}</td>
+                    ${fn(r.nav)}
+                    ${fp(r.pct_1g)}
+                    ${fp(r.pct_1w)}
+                    ${fp(r.pct_1m)}
+                    ${fn(r.mm5)}
+                    ${fn(r.mm20)}
+                    ${r.mm50 != null ? fn(r.mm50) : '<td style="color:#333;">—</td>'}
+                    ${fp(r.dist_mm20)}
+                    <td style="${rsiC};font-weight:bold;">${r.rsi14 != null ? r.rsi14.toFixed(0) : '—'}</td>
+                    <td>${r.adx != null ? r.adx.toFixed(0) : '—'}</td>
+                    <td style="${mhC}">${r.macd_hist != null ? r.macd_hist.toFixed(4) : '—'}</td>
+                </tr>`;
+            }).join('');
+        }
+
         loadData();
         loadHealth();
+        loadPortfolio();
         setInterval(loadData, 60000);
         setInterval(loadHealth, 120000);
+        setInterval(loadPortfolio, 120000);
     </script>
 </body>
 </html>
