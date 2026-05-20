@@ -30,8 +30,9 @@
         .level-2 .level-header { background: linear-gradient(90deg, #FFC000, #FFD000); color: #333; }
         .level-3 .level-header { background: linear-gradient(90deg, #4472C4, #5A8FD4); }
         /* Column widths shared between header and tables */
-        .col-nome { width: 33%; } .col-prezzo { width: 8%; }
-        .col-pct { width: 7%; } .col-ma { width: 8%; } .col-rsi { width: 6%; } .col-buy { width: 6%; } .col-purity { width: 5%; }
+        .col-nome { width: 27%; } .col-prezzo { width: 7%; }
+        .col-pct { width: 6%; } .col-ma { width: 13%; } .col-rsi { width: 5%; } .col-buy { width: 16%; } .col-purity { width: 9%; }
+        .col-gg { width: 6%; } .col-vsent { width: 7%; }
         .purity-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; flex-shrink: 0; }
         .purity-dot.green  { background: #00B050; box-shadow: 0 0 5px #00B050; }
         .purity-dot.yellow { background: #FFC000; box-shadow: 0 0 5px #FFC000; }
@@ -529,10 +530,10 @@
             <div class="level-header"><span>LIVELLO 1 — Core Portfolio</span><span id="l1Count">0 fondi</span></div>
             <table class="fund-table l1-table" style="table-layout:fixed;width:100%;">
                 <colgroup>
-                    <col style="width:27%"><col style="width:7%">
-                    <col style="width:6%"><col style="width:6%"><col style="width:6%">
-                    <col style="width:6%"><col style="width:7%">
-                    <col style="width:5%"><col style="width:16%"><col style="width:9%">
+                    <col class="col-nome"><col class="col-prezzo">
+                    <col class="col-pct"><col class="col-pct"><col class="col-pct">
+                    <col class="col-gg"><col class="col-vsent">
+                    <col class="col-rsi"><col class="col-buy"><col class="col-purity">
                 </colgroup>
                 <thead><tr>
                     <th>Fondo</th><th>Prezzo</th>
