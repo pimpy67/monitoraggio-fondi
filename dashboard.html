@@ -1622,12 +1622,22 @@
             const mm20s  = history.map(r => r.mm20);
             const mm50s  = history.map(r => r.mm50);
 
-            // Indice della data di acquisto nello storico
+            // Indice della data di acquisto portafoglio
             const entryDate = pa?.entry_date || null;
             const entryPrice = pa?.entry_price || null;
             const entryIdx = entryDate ? labels.findIndex(l => l >= entryDate) : -1;
 
-            // Plugin inline per disegnare la linea verticale di acquisto
+            // Date L1 entrata / uscita — cercate sia in tracking attivo che in storico uscite
+            const _isin = currentDetailIsin;
+            const _l1Track = l1TrackingMap[_isin] || null;
+            const _l1Exit  = l1ExitsData.find(e => e.isin === _isin) || null;
+            const l1EntryDate = _l1Track?.entry_date || _l1Exit?.entry_date || null;
+            const l1ExitDate  = _l1Exit?.exit_date || null;
+            const l1EntryIdx  = l1EntryDate ? labels.findIndex(l => l >= l1EntryDate.substring(0,10)) : -1;
+            const l1ExitIdx   = l1ExitDate  ? labels.findIndex(l => l >= l1ExitDate.substring(0,10))  : -1;
+            const l1ExitGain  = _l1Exit?.pct_gain != null ? _l1Exit.pct_gain.toFixed(2) + '%' : null;
+
+            // Plugin: linea acquisto portafoglio (verde tratteggiata)
             const entryLinePlugin = {
                 id: 'entryLine',
                 afterDraw(chart) {
@@ -1639,21 +1649,67 @@
                     c.lineWidth = 1.5;
                     c.setLineDash([5, 4]);
                     c.globalAlpha = 0.7;
-                    c.beginPath();
-                    c.moveTo(xPos, y.top);
-                    c.lineTo(xPos, y.bottom);
-                    c.stroke();
-                    // Etichetta prezzo acquisto
-                    c.setLineDash([]);
-                    c.globalAlpha = 1;
-                    c.fillStyle = '#00FF88';
-                    c.font = 'bold 10px sans-serif';
-                    c.textAlign = 'left';
-                    const label = '✦ ' + entryPrice.toFixed(4);
+                    c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+                    c.setLineDash([]); c.globalAlpha = 1;
+                    c.fillStyle = '#00FF88'; c.font = 'bold 10px sans-serif'; c.textAlign = 'left';
                     const yPos = y.getPixelForValue(entryPrice);
-                    if (yPos > y.top && yPos < y.bottom) {
-                        c.fillText(label, xPos + 4, yPos - 3);
+                    if (yPos > y.top && yPos < y.bottom) c.fillText('✦ ' + entryPrice.toFixed(4), xPos + 4, yPos - 3);
+                    c.restore();
+                }
+            };
+
+            // Plugin: linee verticali L1 entrata (verde) e uscita (rosso) + area shaded
+            const l1LinesPlugin = {
+                id: 'l1Lines',
+                afterDraw(chart) {
+                    const { ctx: c, scales: { x, y } } = chart;
+                    c.save();
+
+                    // Area shaded tra entrata e uscita L1
+                    if (l1EntryIdx >= 0) {
+                        const xEntry = x.getPixelForValue(l1EntryIdx);
+                        const xExit  = l1ExitIdx >= 0 ? x.getPixelForValue(l1ExitIdx) : x.getPixelForValue(labels.length - 1);
+                        c.fillStyle = 'rgba(0, 176, 80, 0.06)';
+                        c.fillRect(xEntry, y.top, xExit - xEntry, y.bottom - y.top);
                     }
+
+                    // Linea verde — entrata L1
+                    if (l1EntryIdx >= 0) {
+                        const xPos = x.getPixelForValue(l1EntryIdx);
+                        c.strokeStyle = '#00B050';
+                        c.lineWidth = 1.5;
+                        c.setLineDash([]);
+                        c.globalAlpha = 0.9;
+                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+                        // Etichetta
+                        c.fillStyle = '#00B050';
+                        c.font = 'bold 9px sans-serif';
+                        c.textAlign = 'center';
+                        c.fillText('▶ L1', xPos, y.top + 10);
+                        c.font = '8px sans-serif';
+                        c.fillText(l1EntryDate.substring(0,10), xPos, y.top + 20);
+                    }
+
+                    // Linea rossa — uscita L1
+                    if (l1ExitIdx >= 0) {
+                        const xPos = x.getPixelForValue(l1ExitIdx);
+                        c.strokeStyle = '#DC3545';
+                        c.lineWidth = 1.5;
+                        c.setLineDash([]);
+                        c.globalAlpha = 0.9;
+                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+                        // Etichetta
+                        c.fillStyle = '#DC3545';
+                        c.font = 'bold 9px sans-serif';
+                        c.textAlign = 'center';
+                        c.fillText('◀ Exit', xPos, y.top + 10);
+                        if (l1ExitGain) {
+                            c.font = 'bold 8px sans-serif';
+                            c.fillStyle = parseFloat(l1ExitGain) >= 0 ? '#00B050' : '#DC3545';
+                            c.fillText(l1ExitGain, xPos, y.top + 20);
+                        }
+                    }
+
                     c.restore();
                 }
             };
@@ -1680,7 +1736,7 @@
                         y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
                     }
                 },
-                plugins: [entryLinePlugin]
+                plugins: [l1LinesPlugin, entryLinePlugin]
             });
         }
 
