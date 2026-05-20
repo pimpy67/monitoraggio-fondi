@@ -723,16 +723,31 @@ class TechnicalAnalyzer:
         # Distanza % da MM20
         distance_from_ma = ((current_price - ma_current) / ma_current * 100) if pd.notna(ma_current) and ma_current != 0 else 0
 
-        # Setup-B: prezzo oggi vs 5 giorni fa (mantenuto per retro-compat)
-        if len(prices) >= 6:
-            price_5d_ago = prices.iloc[-6]
-            nav_rising_alt = float(current_price) > float(price_5d_ago)
-            pct_vs_5d = ((float(current_price) - float(price_5d_ago)) / float(price_5d_ago) * 100) if float(price_5d_ago) != 0 else 0.0
+        # ROC NAV: variazione % del prezzo grezzo su 3 e 5 giorni
+        # Serve a rilevare se il NAV è già in discesa anche quando la MM20 è ancora inerzialmente positiva
+        if len(prices) >= 4:
+            price_3d_ago = float(prices.iloc[-4])
+            roc_3d = (float(current_price) - price_3d_ago) / price_3d_ago * 100 if price_3d_ago != 0 else 0.0
+            roc_3d_ok = roc_3d > 0
         else:
-            nav_rising_alt = False
-            pct_vs_5d = 0.0
+            roc_3d = 0.0
+            roc_3d_ok = False
 
-        # ── CONDIZIONI L1 "TREND SICURO" (5 condizioni, tutte obbligatorie) ──────
+        if len(prices) >= 6:
+            price_5d_ago = float(prices.iloc[-6])
+            roc_5d = (float(current_price) - price_5d_ago) / price_5d_ago * 100 if price_5d_ago != 0 else 0.0
+            roc_5d_ok = roc_5d > 0
+        else:
+            roc_5d = 0.0
+            roc_5d_ok = False
+
+        # Retro-compat (usati nel conditions dict per il dashboard)
+        nav_rising_alt = roc_5d > 0
+        pct_vs_5d = round(roc_5d, 2)
+        nav_momentum_ok = roc_3d > 0
+        pct_vs_3d = round(roc_3d, 2)
+
+        # ── CONDIZIONI L1 "TREND SICURO" (6 condizioni, tutte obbligatorie) ──────
         price_above_ma  = current_price > ma_current if pd.notna(ma_current) else False
         slope_positive  = ma_slope > 0
 
@@ -756,15 +771,6 @@ class TechnicalAnalyzer:
         # Per obbligazionari ADX fisiologicamente basso è normale: la condizione è esentata
         adx_entry_ok = adx_ok if self.asset_type in self.EQUITY_FAMILY else True
 
-        # 6. MOMENTUM NAV: prezzo di oggi sopra quello di 3 giorni fa.
-        #    Blocca ingressi durante pullback verso MM20 (trend breve negativo).
-        if len(prices) >= 4:
-            nav_momentum_ok = float(prices.iloc[-1]) > float(prices.iloc[-4])
-            pct_vs_3d = round((float(prices.iloc[-1]) - float(prices.iloc[-4])) / float(prices.iloc[-4]) * 100, 2)
-        else:
-            nav_momentum_ok = False
-            pct_vs_3d = 0.0
-
         # Retro-compat (usato da exit logic e buy_count)
         trend_ok = persistenza_ok
         nav_rising = nav_rising_alt
@@ -780,6 +786,13 @@ class TechnicalAnalyzer:
             nav_above_upper_bb = False
 
         rising_days = self.count_rising_days(prices, window=5)
+
+        # 6. PENDENZA NAV: il NAV grezzo deve essere in salita su entrambi i timeframe
+        #    e almeno 3 giorni su 5 devono essere chiusure positive.
+        #    Blocca ingressi quando il NAV è già in pullback mentre la MM20 è ancora inerzialmente alta.
+        nav_consistency_ok = rising_days >= 3
+        nav_trend_ok = roc_3d_ok and roc_5d_ok
+        nav_pendenza_ok = nav_trend_ok and nav_consistency_ok
 
         conditions = {
             'price_above_ma': price_above_ma,
@@ -811,9 +824,16 @@ class TechnicalAnalyzer:
             'rsi_prev': round(rsi_prev, 1),
             # Aggregati (per buy_count e retro-compat)
             'trend_ok': trend_ok,
-            # 6a condizione L1
-            'nav_momentum_ok': nav_momentum_ok,
+            # 6a condizione L1 — pendenza NAV grezzo
+            'nav_momentum_ok': nav_momentum_ok,   # retro-compat (= roc_3d > 0)
             'pct_vs_3d': pct_vs_3d,
+            'roc_3d': round(roc_3d, 3),
+            'roc_5d': round(roc_5d, 3),
+            'roc_3d_ok': roc_3d_ok,
+            'roc_5d_ok': roc_5d_ok,
+            'nav_trend_ok': nav_trend_ok,
+            'nav_consistency_ok': nav_consistency_ok,
+            'nav_pendenza_ok': nav_pendenza_ok,
         }
 
         # Segnali uscita L1 (calcolati sempre, usati solo se current_level==1)
@@ -890,7 +910,7 @@ class TechnicalAnalyzer:
             suggested = 2 if price_above_ma_3days else 3
             reason = f'Storico insufficiente per MM50 (min 50 giorni) — ingresso L1 bloccato'
             reason_codes.append('L2_WATCHLIST' if price_above_ma_3days else 'L3_MONITOR')
-        elif allineamento_ok and persistenza_ok and rsi_optimal and distance_ok and adx_entry_ok and nav_momentum_ok:
+        elif allineamento_ok and persistenza_ok and rsi_optimal and distance_ok and adx_entry_ok and nav_pendenza_ok:
             if kill_switch_active:
                 # Kill switch: tutte le condizioni L1 ok ma blocchiamo il nuovo ingresso
                 suggested = current_level
@@ -1170,7 +1190,7 @@ class TechnicalAnalyzer:
             lc.get('rsi_optimal', False),        # 3. RSI nel range target
             lc.get('distance_ok', False),        # 4. dist max da MM20
             lc.get('adx_entry_ok', lc.get('adx_ok', False)),  # 5. ADX>25 (equity) / esentato (bond)
-            lc.get('nav_momentum_ok', False),    # 6. NAV oggi > NAV 3gg fa (trend breve positivo)
+            lc.get('nav_pendenza_ok', False),    # 6. ROC_3>0 + ROC_5>0 + rising_days≥3
         ])
 
         # Calcola distanza dal max 52 settimane

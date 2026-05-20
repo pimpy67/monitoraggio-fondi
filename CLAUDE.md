@@ -125,7 +125,11 @@ Tutti i fondi partono da qui. Nessuna condizione richiesta.
 3. **Momentum RSI**: RSI nel range ottimale (dipende da asset type, vedi sotto)
 4. **Distanza MM20**: NAV sopra MM20 di max % (non troppo esteso)
 5. **ADX**: > soglia (solo classi azionarie — per bond/monetari sempre OK)
-6. **Trend breve**: NAV oggi > NAV 3 giorni fa (blocca ingressi durante pullback)
+6. **Pendenza NAV** (`nav_pendenza_ok`): ROC_3 > 0 **E** ROC_5 > 0 **E** rising_days ≥ 3
+   - ROC_3: NAV oggi > NAV 3 giorni fa (variazione % strettamente positiva)
+   - ROC_5: NAV oggi > NAV 5 giorni fa (variazione % strettamente positiva)
+   - rising_days: almeno 3 chiusure in rialzo negli ultimi 5 giorni
+   - *Blocca ingressi quando il NAV grezzo è già in pullback mentre la MM20 è ancora inerzialmente positiva*
 
 > **Blocco ingresso L1**: se MM50 non calcolabile (storico < 50 giorni) → max L2
 
