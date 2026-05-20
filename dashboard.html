@@ -960,8 +960,11 @@
                 const priceAboveStop = f.price && f.panic_low && f.price > f.panic_low;
                 const stopStyle = priceAboveStop ? 'color:#888' : 'color:#DC3545;font-weight:bold;text-shadow:0 0 4px #DC3545';
                 const entryDate = f.entry_date ? f.entry_date.substring(0, 10) : '-';
+                const isin0 = f.isin || '';
+                const inPf0 = portfolioIsins.has(isin0);
+                const pfBtn0 = isin0 ? `<button class="btn-portfolio-add ${inPf0?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin0}')" title="${inPf0?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf0?'&#10003;':'+ Port.'}</button>` : '';
                 return `<tr style="cursor:pointer;" onclick="openFundDetail('${f.isin}')">
-                    <td class="fund-name" title="${f.isin}">${f.nome || '-'}<span class="fund-isin">${f.isin}</span></td>
+                    <td class="fund-name" title="${f.isin}">${f.nome || '-'}${pfBtn0}<span class="fund-isin">${f.isin}</span></td>
                     <td>${f.casa || '-'}</td>
                     <td style="text-align:center;color:#FF8F00;font-weight:bold;">${f.days_in_l0 || '-'}</td>
                     <td>${f.entry_price ? f.entry_price.toFixed(4) : '-'}</td>
