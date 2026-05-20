@@ -133,15 +133,21 @@ Tutti i fondi partono da qui. Nessuna condizione richiesta.
 
 > **Blocco ingresso L1**: se MM50 non calcolabile (storico < 50 giorni) → max L2
 
-### Uscita L1 — 6 Regole (in ordine di priorità)
-| Regola | Trigger | Azionari | Bond/HY | Money Mkt |
-|--------|---------|:---:|:---:|:---:|
-| A — Stop Loss | NAV < MM20 | ✓ | ✓ | ✓ |
-| B — Trailing Stop | MM5 < MM20 | ✓ | ✓ | ✓ |
-| F — Storico | MM50 non calcolabile | ✓ | ✓ | ✓ |
-| D — Strutturale | MM20 < MM50 | ✓ | ✓ | ✓ |
-| E — ADX debole | ADX < 25 | ✓ | ✗ | ✗ |
-| C — Stanchezza | RSI era > soglia e ora scende | >75 | >75 | **>92** |
+### Uscita L1 — 6 Regole (in ordine di priorità: F → D → A → B → E → C)
+| Priorità | Regola | Trigger | Azionari/Comm. | Bond/HY | Money Mkt |
+|:---:|--------|---------|:---:|:---:|:---:|
+| 1 | F — Storico | MM50 non calcolabile | ✓ | ✓ | ✓ |
+| 2 | D — Strutturale | MM20 < MM50 | ✓ | ✓ | ✓ |
+| 3 | A — Stop Loss | NAV < MM20 | ✓ | **✗** | **✗** |
+| 4 | B — Trailing Stop | MM5 < MM20 | ✓ | ✓ | ✓ |
+| 5 | E — ADX debole | ADX < **20** + NAV < MM5 | ✓ | ✗ | ✗ |
+| 6 | C — Stanchezza | RSI era ≥70, ora scende sotto 70 | ✓ | ✓ | **✗** |
+
+**Note principali rispetto alla versione precedente:**
+- Regola A disabilitata per bond/monetari (singolo giorno sotto MM20 è noise)
+- Regola B diventa trailing principale per bond/monetari
+- Regola E: soglia ADX abbassata da 25 a 20 + condizione congiunta NAV < MM5
+- Regola C: soglia cambiata da ">75 e scende" a "era ≥70, ora <70" (uscita materiale dall'ipercomprato); disabilitata per money_market
 
 ### L0 — Deep Recovery (fondi in forte calo)
 **Entrata** — 4 condizioni tutte obbligatorie:

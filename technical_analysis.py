@@ -841,9 +841,22 @@ class TechnicalAnalyzer:
         }
 
         # Segnali uscita L1 (calcolati sempre, usati solo se current_level==1)
-        ma5_below_ma20  = (ma5_current is not None and pd.notna(ma_current)
-                           and ma5_current < float(ma_current))
-        rsi_exhaustion  = rsi_prev > self.rsi_exhaustion_threshold and rsi_current < rsi_prev
+        ma5_below_ma20 = (ma5_current is not None and pd.notna(ma_current)
+                          and ma5_current < float(ma_current))
+
+        # Regola C: RSI esce materialmente dall'ipercomprato (era >=70, ora <70)
+        # Disabilitata per money_market: RSI strutturalmente 80-90, qualsiasi calo è fisiologico
+        if self.asset_type == 'money_market':
+            rsi_exhaustion = False
+        else:
+            rsi_exhaustion = (rsi_prev >= 70 and rsi_current < 70)
+
+        # Regola E: ADX debole (< 20) + NAV sotto MM5 — congiunto per ridurre falsi segnali
+        # Solo equity/commodities; soglia ADX abbassata da 25 a 20 per dare più respiro
+        _adx_exit_threshold = 20
+        _nav_below_ma5 = (ma5_current is not None and current_price < ma5_current)
+        adx_exhausted = (adx_current < _adx_exit_threshold and _nav_below_ma5
+                         and self.asset_type in self.EQUITY_FAMILY)
 
         # Determina livello suggerito
         reason_codes = []
@@ -856,26 +869,14 @@ class TechnicalAnalyzer:
             conditions['daily_change_pct'] = round(daily_change_pct, 2) if daily_change_pct is not None else None
 
         if current_level == 1:
-            # USCITA L1 — 6 REGOLE (in ordine di priorità):
-            # Regola A: NAV < MM20 → stop loss, tesi fallita
-            # Regola B: MM5 < MM20 → trailing stop, rally esaurito
-            # Regola F: MM50 non calcolabile → storico insufficiente
-            # Regola D: MM20 < MM50 → strutturale, trend deteriorato
-            # Regola E: ADX < 25 (solo classi azionarie) → trend perde forza
-            # Regola C: RSI > 75 e piega in giù → stanchezza, vendi in cima
-            if not price_above_ma:
-                conditions['exit_rule'] = 1
-                conditions['exit_trigger'] = f'NAV {float(current_price):.4f} < MM20 {float(ma_current):.4f}'
-                suggested = 3
-                reason = f'Uscita L1 [Regola A — Stop Loss]: NAV sceso sotto MM20'
-                reason_codes.append('L1_EXIT_STOP_LOSS')
-            elif ma5_below_ma20:
-                conditions['exit_rule'] = 2
-                conditions['exit_trigger'] = f'MM5={ma5_current:.4f} < MM20={float(ma_current):.4f}'
-                suggested = 3
-                reason = f'Uscita L1 [Regola B — Trailing Stop]: MM5 ha incrociato MM20 al ribasso'
-                reason_codes.append('L1_EXIT_TRAILING')
-            elif ma50_current is None:
+            # USCITA L1 — 6 REGOLE, gerarchia: F → D → A (equity) → B → E (equity) → C (no MM)
+            # F prima: integrità dati — se MM50 manca qualsiasi segnale è cieco
+            # D seconda: rottura strutturale macro — priorità su tutto il dinamico
+            # A terza: stop loss grezzo, solo equity/commodities (bond: troppo sensibile al noise)
+            # B quarta: trailing universale su MM5 — principale per bond/monetari
+            # E quinta: ADX < 20 + NAV < MM5, solo equity — congiunto per evitare falsi tagli
+            # C ultima: RSI esce materialmente da ipercomprato (≥70 → <70), no money_market
+            if ma50_current is None:
                 conditions['exit_rule'] = 6
                 conditions['exit_trigger'] = f'MM50 non calcolabile (storico < {self.ma_period_slow} giorni)'
                 suggested = 3
@@ -885,20 +886,35 @@ class TechnicalAnalyzer:
                 conditions['exit_rule'] = 4
                 conditions['exit_trigger'] = f'MM20={float(ma_current):.4f} < MM50={float(ma50_current):.4f}'
                 suggested = 3
-                reason = f'Uscita L1 [Regola D — Strutturale MM]: MM20 sceso sotto MM50 — trend a medio termine deteriorato'
+                reason = f'Uscita L1 [Regola D — Strutturale]: MM20 sceso sotto MM50 — trend a medio termine deteriorato'
                 reason_codes.append('L1_EXIT_STRUCTURAL')
-            elif not adx_ok and self.asset_type in self.EQUITY_FAMILY:
-                # Regola E solo per classi azionarie: per bond/HY/alternativi ADX basso è fisiologico
-                conditions['exit_rule'] = 5
-                conditions['exit_trigger'] = f'ADX={adx_current:.0f} < {self.adx_threshold} (soglia)'
+            elif not price_above_ma and self.asset_type in self.EQUITY_FAMILY:
+                # Solo asset volatili: per bond/monetari un singolo giorno sotto MM20 è noise
+                conditions['exit_rule'] = 1
+                conditions['exit_trigger'] = f'NAV {float(current_price):.4f} < MM20 {float(ma_current):.4f}'
                 suggested = 3
-                reason = f'Uscita L1 [Regola E — ADX debole]: ADX={adx_current:.0f} sotto soglia {self.adx_threshold} — trend perde forza'
+                reason = f'Uscita L1 [Regola A — Stop Loss]: NAV sceso sotto MM20 (asset volatile)'
+                reason_codes.append('L1_EXIT_STOP_LOSS')
+            elif ma5_below_ma20:
+                # Trailing universale — principale per bond/monetari, conferma per equity
+                conditions['exit_rule'] = 2
+                conditions['exit_trigger'] = f'MM5={ma5_current:.4f} < MM20={float(ma_current):.4f}'
+                suggested = 3
+                reason = f'Uscita L1 [Regola B — Trailing Stop]: MM5 ha incrociato MM20 al ribasso'
+                reason_codes.append('L1_EXIT_TRAILING')
+            elif adx_exhausted:
+                # ADX < 20 + NAV < MM5: trend indebolito e prezzo già sotto media breve
+                conditions['exit_rule'] = 5
+                conditions['exit_trigger'] = f'ADX={adx_current:.0f} < {_adx_exit_threshold} + NAV < MM5'
+                suggested = 3
+                reason = f'Uscita L1 [Regola E — ADX debole]: ADX={adx_current:.0f} < {_adx_exit_threshold} con NAV sotto MM5'
                 reason_codes.append('L1_EXIT_ADX_WEAK')
             elif rsi_exhaustion:
+                # RSI scende sotto 70 dopo essere stato >=70: uscita materiale dall'ipercomprato
                 conditions['exit_rule'] = 3
-                conditions['exit_trigger'] = f'RSI era {rsi_prev:.0f} > {self.rsi_exhaustion_threshold}, ora {rsi_current:.0f} (↓)'
+                conditions['exit_trigger'] = f'RSI uscito da ipercomprato: era {rsi_prev:.0f}, ora {rsi_current:.0f} (< 70)'
                 suggested = 3
-                reason = f'Uscita L1 [Regola C — Stanchezza]: RSI={rsi_current:.0f} in discesa da {rsi_prev:.0f}'
+                reason = f'Uscita L1 [Regola C — Stanchezza]: RSI={rsi_current:.0f} uscito da ipercomprato (era {rsi_prev:.0f})'
                 reason_codes.append('L1_EXIT_EXHAUSTION')
             else:
                 conditions['exit_rule'] = None
