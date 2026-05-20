@@ -509,15 +509,15 @@
             <strong>L1 "Trend Sicuro" - Condizioni ENTRATA (6/6 richieste):</strong>
             A. Allineamento: MM20 &gt; MM50 e NAV &gt; MM20 |
             P. Persistenza: NAV sopra MM20 per 5+ gg consecutivi, slope&uarr; |
-            M. Momentum RSI: RSI 55–65 |
-            D. Distanza: NAV max 2.5% sopra MM20 |
-            X. ADX: ADX(14) &gt; 25 (forza trend) |
-            T. Trend breve: NAV oggi &gt; NAV 3 giorni fa
+            M. Momentum RSI: RSI nel range ottimale per classe |
+            D. Distanza: NAV non troppo esteso sopra MM20 |
+            X. ADX: ADX(14) &gt; 25 (solo equity) |
+            N. Pendenza NAV: ROC 3gg &gt; 0 + ROC 5gg &gt; 0 + almeno 3 giorni in rialzo su 5 (blocca ingressi con NAV già in discesa)
             <br>
             <strong>Uscita L1:</strong>
             A. Stop Loss: NAV &lt; MM20 &nbsp;|&nbsp;
             B. Trailing Stop: MM5 &lt; MM20 &nbsp;|&nbsp;
-            C. Stanchezza: RSI era &gt;75 e piega verso il basso &nbsp;|&nbsp;
+            C. Stanchezza: RSI era &gt;75 (equity) / &gt;92 (monetari) e piega verso il basso &nbsp;|&nbsp;
             D. Strutturale: MM20 &lt; MM50 &nbsp;|&nbsp;
             E. ADX &lt; 25 (solo equity) &nbsp;|&nbsp;
             F. MM50 non calcolabile
@@ -704,13 +704,13 @@
                         </tr>
                         <tr>
                             <td class="param-name">RSI entrata L1</td>
-                            <td class="val-bond">48 – 58</td>
-                            <td class="val-corp">50 – 60</td>
-                            <td class="val-hy">52 – 63</td>
+                            <td class="val-bond">45 – 68</td>
+                            <td class="val-corp">48 – 65</td>
+                            <td class="val-hy">50 – 66</td>
                         </tr>
                         <tr>
                             <td class="param-name">RSI oversold (L0)</td>
-                            <td class="val-bond">&lt; 38</td>
+                            <td class="val-bond">&lt; 35</td>
                             <td class="val-corp">&lt; 35</td>
                             <td class="val-hy">&lt; 33</td>
                         </tr>
@@ -747,8 +747,8 @@
                     </tbody>
                 </table>
 
-                <!-- L1 entrata - 5 condizioni -->
-                <div class="param-section-title" style="margin-top:16px;">L1 "Trend Sicuro" — 5 Condizioni di Entrata (tutte richieste)</div>
+                <!-- L1 entrata - 6 condizioni -->
+                <div class="param-section-title" style="margin-top:16px;">L1 "Trend Sicuro" — 6 Condizioni di Entrata (tutte richieste)</div>
                 <table class="param-table">
                     <tbody>
                         <tr>
@@ -774,6 +774,10 @@
                                 &nbsp;<span class="profile-tag eq">azionari sviluppati</span><span class="profile-tag em">EM equity</span><span class="profile-tag sect">settoriali</span><span class="profile-tag comm">commodities</span>
                                 &nbsp;<span class="val-na" style="font-size:0.88em">— non applicato a obbligazionari</span></td>
                         </tr>
+                        <tr>
+                            <td class="param-name"><strong style="color:#fff">6</strong></td>
+                            <td><strong>Pendenza NAV:</strong> ROC 3gg &gt; 0 + ROC 5gg &gt; 0 + almeno 3 giorni in rialzo su 5 — <em>blocca ingressi quando il NAV grezzo è già in discesa verso MM20</em></td>
+                        </tr>
                     </tbody>
                 </table>
 
@@ -782,7 +786,7 @@
                 <div class="exit-grid">
                     <div class="exit-item exit-l1"><span class="exit-label">A.</span> Stop Loss: NAV &lt; MM20</div>
                     <div class="exit-item exit-l1"><span class="exit-label">B.</span> Trailing Stop: MM5 &lt; MM20</div>
-                    <div class="exit-item exit-l1"><span class="exit-label">C.</span> Stanchezza: RSI era &gt;75 e piega verso il basso</div>
+                    <div class="exit-item exit-l1"><span class="exit-label">C.</span> Stanchezza: RSI era &gt;75 (equity) / &gt;92 (monetari) e piega verso il basso</div>
                     <div class="exit-item exit-l1"><span class="exit-label">D.</span> Strutturale: MM20 &lt; MM50 (inversione)</div>
                     <div class="exit-item exit-l1"><span class="exit-label">E.</span> ADX &lt; 25 — <em>solo classi azionarie</em></div>
                     <div class="exit-item exit-l1"><span class="exit-label">F.</span> MM50 non calcolabile (storico insufficiente)</div>
