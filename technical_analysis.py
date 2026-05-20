@@ -113,6 +113,7 @@ class TechnicalAnalyzer:
         # ── Monetari ─────────────────────────────────────────────────────────
         'money_market': {
             # Fondi monetari e liquidità: NAV cresce quasi linearmente ogni giorno.
+            # rsi_exhaustion_threshold alzato a 92: RSI strutturalmente 80-90, soglia 75 causerebbe uscite premature.
             # RSI è strutturalmente alto (80-90) per natura dello strumento, non è
             # "ipercomprato" — non ha senso applicare soglie equity. L'unico segnale
             # rilevante è: NAV sopra MM20 + trend positivo.
@@ -129,6 +130,7 @@ class TechnicalAnalyzer:
             'max_distance_from_ma': 0.5,
             'ma_signal_threshold': 0.1,
             'bb_condition': 'above_ma',
+            'rsi_exhaustion_threshold': 92,
         },
         # ── Obbligazionari ───────────────────────────────────────────────────
         'bond_government': {
@@ -278,6 +280,8 @@ class TechnicalAnalyzer:
         self.max_distance_from_ma = profile['max_distance_from_ma']
         self.ma_signal_threshold = profile.get('ma_signal_threshold', 2.0)
         self.bb_condition = profile.get('bb_condition', 'upper_half')
+        # Soglia RSI stanchezza (Regola C uscita L1): per money_market è alta perché RSI è strutturalmente 80-90
+        self.rsi_exhaustion_threshold = profile.get('rsi_exhaustion_threshold', 75)
     
     def calculate_ma(self, prices: pd.Series, period: int = None) -> pd.Series:
         """
@@ -839,7 +843,7 @@ class TechnicalAnalyzer:
         # Segnali uscita L1 (calcolati sempre, usati solo se current_level==1)
         ma5_below_ma20  = (ma5_current is not None and pd.notna(ma_current)
                            and ma5_current < float(ma_current))
-        rsi_exhaustion  = rsi_prev > 75 and rsi_current < rsi_prev
+        rsi_exhaustion  = rsi_prev > self.rsi_exhaustion_threshold and rsi_current < rsi_prev
 
         # Determina livello suggerito
         reason_codes = []
@@ -892,7 +896,7 @@ class TechnicalAnalyzer:
                 reason_codes.append('L1_EXIT_ADX_WEAK')
             elif rsi_exhaustion:
                 conditions['exit_rule'] = 3
-                conditions['exit_trigger'] = f'RSI era {rsi_prev:.0f} > 75, ora {rsi_current:.0f} (↓)'
+                conditions['exit_trigger'] = f'RSI era {rsi_prev:.0f} > {self.rsi_exhaustion_threshold}, ora {rsi_current:.0f} (↓)'
                 suggested = 3
                 reason = f'Uscita L1 [Regola C — Stanchezza]: RSI={rsi_current:.0f} in discesa da {rsi_prev:.0f}'
                 reason_codes.append('L1_EXIT_EXHAUSTION')

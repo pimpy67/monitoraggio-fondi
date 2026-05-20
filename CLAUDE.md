@@ -134,14 +134,14 @@ Tutti i fondi partono da qui. Nessuna condizione richiesta.
 > **Blocco ingresso L1**: se MM50 non calcolabile (storico < 50 giorni) → max L2
 
 ### Uscita L1 — 6 Regole (in ordine di priorità)
-| Regola | Trigger |
-|--------|---------|
-| A — Stop Loss | NAV < MM20 |
-| B — Trailing Stop | MM5 < MM20 |
-| F — Storico | MM50 non calcolabile |
-| D — Strutturale | MM20 < MM50 |
-| E — ADX debole | ADX < soglia (solo azionari) |
-| C — Stanchezza | RSI era > 75 e ora scende |
+| Regola | Trigger | Azionari | Bond/HY | Money Mkt |
+|--------|---------|:---:|:---:|:---:|
+| A — Stop Loss | NAV < MM20 | ✓ | ✓ | ✓ |
+| B — Trailing Stop | MM5 < MM20 | ✓ | ✓ | ✓ |
+| F — Storico | MM50 non calcolabile | ✓ | ✓ | ✓ |
+| D — Strutturale | MM20 < MM50 | ✓ | ✓ | ✓ |
+| E — ADX debole | ADX < 25 | ✓ | ✗ | ✗ |
+| C — Stanchezza | RSI era > soglia e ora scende | >75 | >75 | **>92** |
 
 ### L0 — Deep Recovery (fondi in forte calo)
 **Entrata** — 4 condizioni tutte obbligatorie:
@@ -173,8 +173,10 @@ Se variazione giornaliera NAV ≤ −3%: nuovi ingressi L0 e L1 bloccati; uscite
 | **RSI ottimale L1** | **55–65** | **55–65** | **54–66** | **54–66** | **40–95** | **45–68** | **48–65** | **50–66** |
 | Max dist MM20 | 2.5% | 3.0% | 2.5% | 3.0% | 0.5% | 1.5% | 2.0% | 3.0% |
 | Giorni sopra MM20 | 5 | 5 | 5 | 5 | 3 | 3 | 3 | 3 |
+| Bollinger σ | 2.0 | 2.0 | 2.0 | 2.0 | 1.0 | 1.5 | 1.7 | 1.8 |
+| RSI stanchezza (Regola C) | >75 | >75 | >75 | >75 | **>92** | >75 | >75 | >75 |
 
-> **money_market**: RSI strutturalmente alto (80-90) per natura dello strumento (NAV cresce ~linearmente). Non indica ipercomprato. ADX non richiesto.
+> **money_market**: RSI strutturalmente alto (80-90) per natura dello strumento (NAV cresce ~linearmente). Non indica ipercomprato. ADX non richiesto. Regola C alzata a >92 per evitare uscite premature su normali oscillazioni RSI.
 
 ### Rilevamento asset_type da categoria Excel
 | Categoria contiene | → asset_type |
