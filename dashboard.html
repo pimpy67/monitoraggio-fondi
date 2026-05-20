@@ -30,7 +30,7 @@
         .level-2 .level-header { background: linear-gradient(90deg, #FFC000, #FFD000); color: #333; }
         .level-3 .level-header { background: linear-gradient(90deg, #4472C4, #5A8FD4); }
         /* Column widths shared between header and tables */
-        .col-nome { width: 23%; } .col-casa { width: 10%; } .col-prezzo { width: 8%; }
+        .col-nome { width: 33%; } .col-prezzo { width: 8%; }
         .col-pct { width: 7%; } .col-ma { width: 8%; } .col-rsi { width: 6%; } .col-buy { width: 6%; } .col-purity { width: 5%; }
         .purity-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; flex-shrink: 0; }
         .purity-dot.green  { background: #00B050; box-shadow: 0 0 5px #00B050; }
@@ -466,8 +466,8 @@
 
     <div class="column-header">
         <table>
-            <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
-            <tr><th>Fondo</th><th>Casa / Cat.</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity: fedeltà al benchmark">Fedeltà</th></tr>
+            <colgroup><col class="col-nome"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
+            <tr><th>Fondo</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity: fedeltà al benchmark">Fedeltà</th></tr>
         </table>
     </div>
 
@@ -573,8 +573,8 @@
         <div class="level-section level-2">
             <div class="level-header"><span>LIVELLO 2 — Watchlist</span><span id="l2Count">0 fondi</span></div>
             <table class="fund-table">
-                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
-                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity">Fed.</th></tr></thead>
+                <colgroup><col class="col-nome"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
+                <thead><tr><th>Fondo</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity">Fed.</th></tr></thead>
                 <tbody id="level2Body"></tbody>
             </table>
         </div>
@@ -582,8 +582,8 @@
         <div class="level-section level-3">
             <div class="level-header"><span>LIVELLO 3 — Universe</span><span id="l3Count">0 fondi</span></div>
             <table class="fund-table">
-                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
-                <thead><tr><th>Fondo</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity">Fed.</th></tr></thead>
+                <colgroup><col class="col-nome"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
+                <thead><tr><th>Fondo</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity">Fed.</th></tr></thead>
                 <tbody id="level3Body"></tbody>
             </table>
         </div>
@@ -1062,7 +1062,7 @@
                 // Conditions
                 const c = f.conditions || {};
                 const bc = f.buy_count || 0;
-                const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_momentum_ok?'<span style="color:#0f0" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>':'<span style="color:#555" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>'}</span>`;
+                const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_pendenza_ok?'<span style="color:#0f0" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>':'<span style="color:#555" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>'}</span>`;
 
                 const fmtPct = v => {
                     if (v == null) return '<td class="pct zero">—</td>';
@@ -1134,7 +1134,7 @@
             document.getElementById(`l${level}Count`).textContent = `${filtered.length} fondi`;
 
             if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="10" class="empty-msg">Nessun fondo in questo livello</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="empty-msg">Nessun fondo in questo livello</td></tr>`;
                 return;
             }
 
@@ -1156,7 +1156,6 @@
                 } else if (level === 2 && bc >= 4) {
                     procintoHtml = `<span class="badge-procinto p4" title="${bc}/6 condizioni L1 soddisfatte">⚡ ${bc}/6</span>`;
                 }
-                const secondCol = level === 3 ? f.categoria : f.casa;
                 const fmtPct = v => {
                     if (v == null) return '<td class="pct zero">—</td>';
                     const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
@@ -1178,11 +1177,10 @@
                     : `<span class="purity-badge grey" title="Dati insufficienti">N/D</span>`;
                 // Conditions dots
                 const c = f.conditions || {};
-                const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_momentum_ok?'<span style="color:#0f0" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>':'<span style="color:#555" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>'}</span>`;
+                const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_pendenza_ok?'<span style="color:#0f0" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>':'<span style="color:#555" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>'}</span>`;
 
                 return `<tr onclick="openFundDetail('${isin}')">
                     <td class="fund-name" title="${f.nome||isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || '—'}${assetTag}${procintoHtml}</span>${pfBtn}</div><span class="fund-isin">${isin}</span></td>
-                    <td style="font-size:0.82em;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${secondCol||''}">${secondCol || '—'}</td>
                     <td>${f.price ? f.price.toFixed(2) : '—'}</td>
                     ${fmtPct(f.pct_1d)}${fmtPct(f.pct_1w)}${fmtPct(f.pct_1m)}
                     ${distStr}
