@@ -108,7 +108,9 @@
         .pct.pos { color: #00B050; }
         .pct.neg { color: #DC3545; }
         .pct.zero { color: #aaa; }
-        .fund-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+        .fund-name { line-height: 1.3; }
+        .fund-name-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+        .fund-name-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
         .fund-isin { display: block; font-size: 0.72em; color: #666; font-family: monospace; }
         .health-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; cursor: pointer; margin-right: 6px; animation: pulse 2s infinite; }
         .health-dot.green { background: #00B050; box-shadow: 0 0 6px #00B050; }
@@ -964,7 +966,7 @@
                 const inPf0 = portfolioIsins.has(isin0);
                 const pfBtn0 = isin0 ? `<button class="btn-portfolio-add ${inPf0?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin0}')" title="${inPf0?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf0?'&#10003;':'+ Port.'}</button>` : '';
                 return `<tr style="cursor:pointer;" onclick="openFundDetail('${f.isin}')">
-                    <td class="fund-name" title="${f.isin}">${f.nome || '-'}${pfBtn0}<span class="fund-isin">${f.isin}</span></td>
+                    <td class="fund-name" title="${f.nome||f.isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || '-'}</span>${pfBtn0}</div><span class="fund-isin">${f.isin}</span></td>
                     <td>${f.casa || '-'}</td>
                     <td style="text-align:center;color:#FF8F00;font-weight:bold;">${f.days_in_l0 || '-'}</td>
                     <td>${f.entry_price ? f.entry_price.toFixed(4) : '-'}</td>
@@ -1071,7 +1073,7 @@
                 const pfBtn = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
 
                 return `<tr onclick="openFundDetail('${isin}')">
-                    <td class="fund-name" title="${isin}">${f.nome || isin}${nuovoBadge}${exitWarn}${pfBtn}<span class="fund-isin">${isin}</span></td>
+                    <td class="fund-name" title="${f.nome||isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || isin}${nuovoBadge}${exitWarn}</span>${pfBtn}</div><span class="fund-isin">${isin}</span></td>
                     <td>${f.price ? f.price.toFixed(2) : '—'}</td>
                     ${fmtPct(f.pct_1d)}${fmtPct(f.pct_1w)}${fmtPct(f.pct_1m)}
                     <td style="text-align:center">${daysHtml}</td>
@@ -1179,7 +1181,7 @@
                 const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_momentum_ok?'<span style="color:#0f0" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>':'<span style="color:#555" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>'}</span>`;
 
                 return `<tr onclick="openFundDetail('${isin}')">
-                    <td class="fund-name" title="${isin}">${f.nome || '—'}${assetTag}${procintoHtml}${pfBtn}<span class="fund-isin">${isin}</span></td>
+                    <td class="fund-name" title="${f.nome||isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || '—'}${assetTag}${procintoHtml}</span>${pfBtn}</div><span class="fund-isin">${isin}</span></td>
                     <td style="font-size:0.82em;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${secondCol||''}">${secondCol || '—'}</td>
                     <td>${f.price ? f.price.toFixed(2) : '—'}</td>
                     ${fmtPct(f.pct_1d)}${fmtPct(f.pct_1w)}${fmtPct(f.pct_1m)}
