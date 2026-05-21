@@ -217,7 +217,11 @@ class TechnicalAnalyzer:
         # Es. "Energie Alternative" contiene 'alternativ' ma è un fondo settoriale, non high_yield
         if any(kw in cat for kw in ('settorial', 'thematic', 'tecnolog', 'healthcare',
                                      'salute', 'energia', 'infrastruttur', 'real estate',
-                                     'immobil', 'biotech', 'pharma', 'fintech')):
+                                     'immobil', 'biotech', 'pharma', 'fintech',
+                                     'consumi', 'lusso', 'consumer', 'luxury',
+                                     'acqua', 'water', 'agri', 'food', 'nutrizi',
+                                     'cyber', 'sicurezza', 'security',
+                                     'biotecnolog', 'farmac')):
             return 'sector_thematic'
 
         # ── Multi-asset/bilanciati/alternativi → high_yield ─────────────────
@@ -235,7 +239,11 @@ class TechnicalAnalyzer:
                 return 'emerging_markets'
             if any(kw in cat for kw in ('settorial', 'thematic', 'tecnolog', 'healthcare',
                                          'salute', 'finanz', 'energia', 'infrastruttur',
-                                         'real estate', 'immobil', 'biotech', 'pharma')):
+                                         'real estate', 'immobil', 'biotech', 'pharma',
+                                         'consumi', 'lusso', 'consumer', 'luxury',
+                                         'acqua', 'water', 'agri', 'food', 'nutrizi',
+                                         'cyber', 'sicurezza', 'security',
+                                         'biotecnolog', 'farmac')):
                 return 'sector_thematic'
             if any(kw in cat for kw in ('materie prime', 'commodity', 'commodities',
                                          'metalli', 'oro', 'gold', 'petrolio')):
