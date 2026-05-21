@@ -429,16 +429,20 @@
                 <input type="date" id="swDate">
             </div>
             <div class="modal-field">
-                <label>NAV al momento dello Switch</label>
-                <input type="number" id="swPrice" step="0.0001" min="0" placeholder="es. 12.3456">
-            </div>
-            <div class="modal-field">
                 <label>Fondo Destinazione (nome)</label>
                 <input type="text" id="swTargetName" placeholder="es. Amundi Euro Liquidity">
             </div>
             <div class="modal-field">
                 <label>ISIN Destinazione (opzionale)</label>
                 <input type="text" id="swTargetIsin" placeholder="es. LU1234567890" style="font-family:monospace;font-size:0.82em;">
+            </div>
+            <div class="modal-field">
+                <label>NAV Fondo Destinazione <span style="color:#FFC000;">&#9654; quello che conosci</span></label>
+                <input type="number" id="swTargetPrice" step="0.0001" min="0" placeholder="es. 12.3456">
+            </div>
+            <div class="modal-field">
+                <label>NAV Fondo Origine (opzionale — auto dal prezzo attuale)</label>
+                <input type="number" id="swPrice" step="0.0001" min="0" placeholder="lascia vuoto se non disponibile">
             </div>
             <div class="modal-field">
                 <label>Note (opzionale)</label>
@@ -1552,14 +1556,15 @@
             _switchIsin = isin;
             const p = (portfolioData || []).find(x => x.isin === isin) || {};
             document.getElementById('swIsin').value = isin;
-            document.getElementById('switchFundLabel').textContent = p.fund_name || isin;
+            document.getElementById('switchFundLabel').textContent = (p.fund_name || isin) + ' → ' + (p.entry_date || '');
             document.getElementById('swDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('swPrice').value = p.current_nav ? parseFloat(p.current_nav).toFixed(4) : '';
+            document.getElementById('swTargetPrice').value = '';
             document.getElementById('swTargetName').value = '';
             document.getElementById('swTargetIsin').value = '';
             document.getElementById('swNotes').value = '';
             document.getElementById('switchModal').classList.add('open');
-            setTimeout(() => document.getElementById('swPrice').focus(), 100);
+            setTimeout(() => document.getElementById('swTargetName').focus(), 100);
         }
         function closeSwitchModal() {
             document.getElementById('switchModal').classList.remove('open');
@@ -1568,28 +1573,35 @@
         async function submitSwitch() {
             const isin = document.getElementById('swIsin').value;
             const date = document.getElementById('swDate').value;
-            const price = parseFloat(document.getElementById('swPrice').value);
+            const sourcePrice = parseFloat(document.getElementById('swPrice').value);
+            const targetPrice = parseFloat(document.getElementById('swTargetPrice').value);
             const targetName = document.getElementById('swTargetName').value.trim();
             const targetIsin = document.getElementById('swTargetIsin').value.trim();
             const notes = document.getElementById('swNotes').value.trim();
-            if (!date || isNaN(price) || price <= 0) { alert('Compila data e NAV'); return; }
+            if (!date) { alert('Inserisci la data dello switch'); return; }
+            const payload = {
+                event_date: date,
+                event_price: isNaN(sourcePrice) || sourcePrice <= 0 ? null : sourcePrice,
+                target_price: isNaN(targetPrice) || targetPrice <= 0 ? null : targetPrice,
+                target_fund_name: targetName || null,
+                target_isin: targetIsin || null,
+                notes: notes || null
+            };
             try {
                 const res = await fetch('/api/portfolio/' + isin + '/switch', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({event_date: date, event_price: price,
-                                         target_fund_name: targetName || null,
-                                         target_isin: targetIsin || null,
-                                         notes: notes || null})
+                    body: JSON.stringify(payload)
                 });
+                let d = {};
+                try { d = await res.json(); } catch(e) { /* ignore parse error */ }
                 if (res.ok) {
                     closeSwitchModal();
                     portfolioEventsCache = {};
                     detailCache = {};
                     loadPortfolio();
                 } else {
-                    const d = await res.json();
-                    alert('Errore: ' + (d.error || 'sconosciuto'));
+                    alert('Errore: ' + (d.error || 'HTTP ' + res.status));
                 }
             } catch(e) { alert('Errore rete: ' + e.message); }
         }
@@ -1622,6 +1634,8 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({exit_date: date, exit_price: price})
                 });
+                let d = {};
+                try { d = await res.json(); } catch(e) { /* ignore parse error */ }
                 if (res.ok) {
                     closeExitModal();
                     portfolioEventsCache = {};
@@ -1629,8 +1643,7 @@
                     historyCache = {};
                     loadPortfolio();
                 } else {
-                    const d = await res.json();
-                    alert('Errore: ' + (d.error || 'sconosciuto'));
+                    alert('Errore: ' + (d.error || 'HTTP ' + res.status));
                 }
             } catch(e) { alert('Errore rete: ' + e.message); }
         }
@@ -1672,13 +1685,13 @@
                     return;
                 }
                 list.innerHTML = `<table class="ev-table">
-                    <thead><tr><th>Data</th><th>NAV</th><th>Destinazione</th><th>Note</th><th></th></tr></thead>
+                    <thead><tr><th>Data</th><th>NAV Origine</th><th>NAV Destinaz.</th><th>Destinazione</th><th></th></tr></thead>
                     <tbody>${evs.map(ev => `
                         <tr id="ev-row-${ev.id}">
                             <td><input type="date" value="${ev.event_date}" id="ev-date-${ev.id}" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;padding:2px 5px;font-size:0.9em;width:110px;"></td>
-                            <td><input type="number" value="${ev.event_price||''}" id="ev-price-${ev.id}" step="0.0001" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;padding:2px 5px;font-size:0.9em;width:90px;"></td>
+                            <td><input type="number" value="${ev.event_price||''}" id="ev-price-${ev.id}" step="0.0001" placeholder="—" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;padding:2px 5px;font-size:0.9em;width:85px;"></td>
+                            <td><input type="number" value="${ev.target_price||''}" id="ev-tprice-${ev.id}" step="0.0001" placeholder="—" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#FFC000;padding:2px 5px;font-size:0.9em;width:85px;"></td>
                             <td style="color:#aaa;font-size:0.9em;">${ev.target_fund_name||ev.target_isin||'—'}</td>
-                            <td style="color:#666;font-size:0.85em;">${ev.notes||'—'}</td>
                             <td style="white-space:nowrap;">
                                 <button class="btn-edit-ev" onclick="saveEventEdit(${ev.id})" style="padding:2px 6px;">&#10003;</button>
                                 <button class="btn-remove" onclick="deleteEvent(${ev.id},'${isin}')" style="padding:2px 6px;margin-left:3px;">&#10005;</button>
@@ -1731,14 +1744,21 @@
         async function saveEventEdit(eventId) {
             const date = document.getElementById('ev-date-' + eventId).value;
             const price = parseFloat(document.getElementById('ev-price-' + eventId).value);
+            const tprice = parseFloat(document.getElementById('ev-tprice-' + eventId).value);
             if (!date) { alert('Data obbligatoria'); return; }
             const res = await fetch('/api/portfolio/events/' + eventId, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({event_date: date, event_price: isNaN(price) ? null : price})
+                body: JSON.stringify({
+                    event_date: date,
+                    event_price: isNaN(price) ? null : price,
+                    target_price: isNaN(tprice) ? null : tprice
+                })
             });
-            if (res.ok) { portfolioEventsCache = {}; detailCache = {}; }
-            else { const d = await res.json(); alert('Errore: ' + (d.error||'?')); }
+            let d = {};
+            try { d = await res.json(); } catch(e) {}
+            if (!res.ok) { alert('Errore: ' + (d.error||'HTTP ' + res.status)); }
+            else { portfolioEventsCache = {}; detailCache = {}; }
         }
 
         async function deleteEvent(eventId, isin) {

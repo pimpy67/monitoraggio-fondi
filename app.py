@@ -609,24 +609,31 @@ def reactivate_portfolio(isin):
 @app.route('/api/portfolio/<isin>/switch', methods=['POST'])
 def add_switch_event(isin):
     """Registra uno switch (uscita parziale) su un fondo del portafoglio."""
-    isin = isin.strip().upper()
-    data = request.get_json() or {}
-    event_date = data.get('event_date', '')
-    event_price = data.get('event_price')
-    target_isin = data.get('target_isin', '').strip().upper() or None
-    target_fund_name = data.get('target_fund_name', '').strip() or None
-    notes = data.get('notes', '').strip() or None
-    if not event_date or event_price is None:
-        return jsonify({'error': 'event_date e event_price obbligatori'}), 400
     try:
-        event_price = float(event_price)
-    except (ValueError, TypeError):
-        return jsonify({'error': 'event_price deve essere un numero'}), 400
-    eid = db.add_portfolio_event(isin, 'switch', event_date, event_price,
-                                 target_isin, target_fund_name, notes)
-    if eid >= 0:
-        return jsonify({'status': 'ok', 'id': eid, 'isin': isin})
-    return jsonify({'error': 'Errore salvataggio'}), 503
+        isin = isin.strip().upper()
+        data = request.get_json() or {}
+        event_date = data.get('event_date', '')
+        event_price = data.get('event_price')       # NAV fondo origine (opzionale)
+        target_price = data.get('target_price')     # NAV fondo destinazione
+        target_isin = (data.get('target_isin') or '').strip().upper() or None
+        target_fund_name = (data.get('target_fund_name') or '').strip() or None
+        notes = (data.get('notes') or '').strip() or None
+        if not event_date:
+            return jsonify({'error': 'event_date obbligatorio'}), 400
+        try:
+            event_price = float(event_price) if event_price is not None else None
+            target_price = float(target_price) if target_price is not None else None
+        except (ValueError, TypeError):
+            return jsonify({'error': 'I prezzi devono essere numeri'}), 400
+        eid = db.add_portfolio_event(isin, 'switch', event_date, event_price,
+                                     target_isin, target_fund_name, notes,
+                                     target_price=target_price)
+        if eid >= 0:
+            return jsonify({'status': 'ok', 'id': eid, 'isin': isin})
+        return jsonify({'error': 'Errore salvataggio'}), 503
+    except Exception as e:
+        logging.error(f"Errore route switch {isin}: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/portfolio/events/<isin>', methods=['GET'])
@@ -640,23 +647,30 @@ def get_portfolio_events(isin):
 @app.route('/api/portfolio/events/<int:event_id>', methods=['PUT'])
 def update_portfolio_event(event_id):
     """Modifica un evento portafoglio (data, prezzo, destinazione)."""
-    data = request.get_json() or {}
-    event_date = data.get('event_date', '')
-    event_price = data.get('event_price')
-    target_isin = data.get('target_isin', '').strip().upper() or None
-    target_fund_name = data.get('target_fund_name', '').strip() or None
-    notes = data.get('notes', '').strip() or None
-    if not event_date:
-        return jsonify({'error': 'event_date obbligatorio'}), 400
     try:
-        event_price = float(event_price) if event_price is not None else None
-    except (ValueError, TypeError):
-        return jsonify({'error': 'event_price deve essere un numero'}), 400
-    ok = db.update_portfolio_event(event_id, event_date, event_price,
-                                   target_isin, target_fund_name, notes)
-    if ok:
-        return jsonify({'status': 'ok', 'id': event_id})
-    return jsonify({'error': 'Errore aggiornamento'}), 503
+        data = request.get_json() or {}
+        event_date = data.get('event_date', '')
+        event_price = data.get('event_price')
+        target_price = data.get('target_price')
+        target_isin = (data.get('target_isin') or '').strip().upper() or None
+        target_fund_name = (data.get('target_fund_name') or '').strip() or None
+        notes = (data.get('notes') or '').strip() or None
+        if not event_date:
+            return jsonify({'error': 'event_date obbligatorio'}), 400
+        try:
+            event_price = float(event_price) if event_price is not None else None
+            target_price = float(target_price) if target_price is not None else None
+        except (ValueError, TypeError):
+            return jsonify({'error': 'I prezzi devono essere numeri'}), 400
+        ok = db.update_portfolio_event(event_id, event_date, event_price,
+                                       target_isin, target_fund_name, notes,
+                                       target_price=target_price)
+        if ok:
+            return jsonify({'status': 'ok', 'id': event_id})
+        return jsonify({'error': 'Errore aggiornamento'}), 503
+    except Exception as e:
+        logging.error(f"Errore route update_event {event_id}: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/portfolio/events/<int:event_id>', methods=['DELETE'])
