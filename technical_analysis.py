@@ -75,7 +75,7 @@ class TechnicalAnalyzer:
             'bb_condition': 'upper_half',
         },
         'sector_thematic': {
-            # Fondi settoriali/tematici: range RSI leggermente più ampio
+            # Fondi settoriali/tematici: range RSI e distanza più ampi per catturare strappi violenti
             'ma_period': 20,
             'ma_period_slow': 50,
             'adx_period': 14,
@@ -87,8 +87,8 @@ class TechnicalAnalyzer:
             'bollinger_std': 2.0,
             'days_above_ma': 5,
             'rsi_optimal_low': 54,
-            'rsi_optimal_high': 66,
-            'max_distance_from_ma': 2.5,
+            'rsi_optimal_high': 70,
+            'max_distance_from_ma': 3.5,
             'ma_signal_threshold': 2.0,
             'bb_condition': 'upper_half',
         },
@@ -113,6 +113,7 @@ class TechnicalAnalyzer:
         # ── Monetari ─────────────────────────────────────────────────────────
         'money_market': {
             # Fondi monetari e liquidità: NAV cresce quasi linearmente ogni giorno.
+            # rsi_exhaustion_threshold alzato a 92: RSI strutturalmente 80-90, soglia 75 causerebbe uscite premature.
             # RSI è strutturalmente alto (80-90) per natura dello strumento, non è
             # "ipercomprato" — non ha senso applicare soglie equity. L'unico segnale
             # rilevante è: NAV sopra MM20 + trend positivo.
@@ -129,6 +130,7 @@ class TechnicalAnalyzer:
             'max_distance_from_ma': 0.5,
             'ma_signal_threshold': 0.1,
             'bb_condition': 'above_ma',
+            'rsi_exhaustion_threshold': 92,
         },
         # ── Obbligazionari ───────────────────────────────────────────────────
         'bond_government': {
@@ -211,6 +213,17 @@ class TechnicalAnalyzer:
         if any(kw in cat for kw in ('monetar', 'money market', 'liquidity')):
             return 'money_market'
 
+        # ── Settoriali/tematici — check anticipato per evitare falsi match su 'alternativ' ──
+        # Es. "Energie Alternative" contiene 'alternativ' ma è un fondo settoriale, non high_yield
+        if any(kw in cat for kw in ('settorial', 'thematic', 'tecnolog', 'healthcare',
+                                     'salute', 'energia', 'infrastruttur', 'real estate',
+                                     'immobil', 'biotech', 'pharma', 'fintech',
+                                     'consumi', 'lusso', 'consumer', 'luxury',
+                                     'acqua', 'water', 'agri', 'food', 'nutrizi',
+                                     'cyber', 'sicurezza', 'security',
+                                     'biotecnolog', 'farmac')):
+            return 'sector_thematic'
+
         # ── Multi-asset/bilanciati/alternativi → high_yield ─────────────────
         # Questo check è prima di is_bond: "bilanciati" non contiene parole chiave bond
         if any(kw in cat for kw in ('alternativ', 'long-short', 'long short', 'absolute return',
@@ -224,9 +237,13 @@ class TechnicalAnalyzer:
             if any(kw in cat for kw in ('emerging', 'mercati emergenti', 'em ', 'cina', 'india',
                                          'brasile', 'asia pacific', 'paesi emergenti')):
                 return 'emerging_markets'
-            if any(kw in cat for kw in ('settoriale', 'thematic', 'tecnolog', 'healthcare',
+            if any(kw in cat for kw in ('settorial', 'thematic', 'tecnolog', 'healthcare',
                                          'salute', 'finanz', 'energia', 'infrastruttur',
-                                         'real estate', 'immobil', 'biotech', 'pharma')):
+                                         'real estate', 'immobil', 'biotech', 'pharma',
+                                         'consumi', 'lusso', 'consumer', 'luxury',
+                                         'acqua', 'water', 'agri', 'food', 'nutrizi',
+                                         'cyber', 'sicurezza', 'security',
+                                         'biotecnolog', 'farmac')):
                 return 'sector_thematic'
             if any(kw in cat for kw in ('materie prime', 'commodity', 'commodities',
                                          'metalli', 'oro', 'gold', 'petrolio')):
@@ -278,6 +295,8 @@ class TechnicalAnalyzer:
         self.max_distance_from_ma = profile['max_distance_from_ma']
         self.ma_signal_threshold = profile.get('ma_signal_threshold', 2.0)
         self.bb_condition = profile.get('bb_condition', 'upper_half')
+        # Soglia RSI stanchezza (Regola C uscita L1): per money_market è alta perché RSI è strutturalmente 80-90
+        self.rsi_exhaustion_threshold = profile.get('rsi_exhaustion_threshold', 75)
     
     def calculate_ma(self, prices: pd.Series, period: int = None) -> pd.Series:
         """
@@ -723,16 +742,31 @@ class TechnicalAnalyzer:
         # Distanza % da MM20
         distance_from_ma = ((current_price - ma_current) / ma_current * 100) if pd.notna(ma_current) and ma_current != 0 else 0
 
-        # Setup-B: prezzo oggi vs 5 giorni fa (mantenuto per retro-compat)
-        if len(prices) >= 6:
-            price_5d_ago = prices.iloc[-6]
-            nav_rising_alt = float(current_price) > float(price_5d_ago)
-            pct_vs_5d = ((float(current_price) - float(price_5d_ago)) / float(price_5d_ago) * 100) if float(price_5d_ago) != 0 else 0.0
+        # ROC NAV: variazione % del prezzo grezzo su 3 e 5 giorni
+        # Serve a rilevare se il NAV è già in discesa anche quando la MM20 è ancora inerzialmente positiva
+        if len(prices) >= 4:
+            price_3d_ago = float(prices.iloc[-4])
+            roc_3d = (float(current_price) - price_3d_ago) / price_3d_ago * 100 if price_3d_ago != 0 else 0.0
+            roc_3d_ok = roc_3d > 0
         else:
-            nav_rising_alt = False
-            pct_vs_5d = 0.0
+            roc_3d = 0.0
+            roc_3d_ok = False
 
-        # ── CONDIZIONI L1 "TREND SICURO" (5 condizioni, tutte obbligatorie) ──────
+        if len(prices) >= 6:
+            price_5d_ago = float(prices.iloc[-6])
+            roc_5d = (float(current_price) - price_5d_ago) / price_5d_ago * 100 if price_5d_ago != 0 else 0.0
+            roc_5d_ok = roc_5d > 0
+        else:
+            roc_5d = 0.0
+            roc_5d_ok = False
+
+        # Retro-compat (usati nel conditions dict per il dashboard)
+        nav_rising_alt = roc_5d > 0
+        pct_vs_5d = round(roc_5d, 2)
+        nav_momentum_ok = roc_3d > 0
+        pct_vs_3d = round(roc_3d, 2)
+
+        # ── CONDIZIONI L1 "TREND SICURO" (6 condizioni, tutte obbligatorie) ──────
         price_above_ma  = current_price > ma_current if pd.notna(ma_current) else False
         slope_positive  = ma_slope > 0
 
@@ -748,22 +782,21 @@ class TechnicalAnalyzer:
         # 3. MOMENTUM: RSI 55–65
         rsi_optimal = self.rsi_optimal_low <= rsi_current <= self.rsi_optimal_high
 
-        # 4. DISTANZA: NAV sopra MM20 di max 2.5%
-        distance_ok = 0 <= distance_from_ma < self.max_distance_from_ma
+        # 4. DISTANZA: NAV sopra MM20 di max X% (con override per breakout violento nei settoriali)
+        # Breakout override: se settoriale fa +3.5% in un giorno, soglia sale temporaneamente a 5%
+        pct_1g = ((float(current_price) - float(prices.iloc[-2])) / float(prices.iloc[-2]) * 100
+                  ) if len(prices) >= 2 and float(prices.iloc[-2]) != 0 else 0.0
+        breakout_day = (self.asset_type == 'sector_thematic'
+                        and pct_1g >= 3.5
+                        and rsi_current < 75
+                        and mm20_above_mm50)
+        effective_max_dist = 5.0 if breakout_day else self.max_distance_from_ma
+        distance_ok = 0 <= distance_from_ma < effective_max_dist
 
         # 5. ADX: > 25 (trend con direzione)
         adx_ok = adx_current > self.adx_threshold
         # Per obbligazionari ADX fisiologicamente basso è normale: la condizione è esentata
         adx_entry_ok = adx_ok if self.asset_type in self.EQUITY_FAMILY else True
-
-        # 6. MOMENTUM NAV: prezzo di oggi sopra quello di 3 giorni fa.
-        #    Blocca ingressi durante pullback verso MM20 (trend breve negativo).
-        if len(prices) >= 4:
-            nav_momentum_ok = float(prices.iloc[-1]) > float(prices.iloc[-4])
-            pct_vs_3d = round((float(prices.iloc[-1]) - float(prices.iloc[-4])) / float(prices.iloc[-4]) * 100, 2)
-        else:
-            nav_momentum_ok = False
-            pct_vs_3d = 0.0
 
         # Retro-compat (usato da exit logic e buy_count)
         trend_ok = persistenza_ok
@@ -780,6 +813,13 @@ class TechnicalAnalyzer:
             nav_above_upper_bb = False
 
         rising_days = self.count_rising_days(prices, window=5)
+
+        # 6. PENDENZA NAV: il NAV grezzo deve essere in salita su entrambi i timeframe
+        #    e almeno 3 giorni su 5 devono essere chiusure positive.
+        #    Blocca ingressi quando il NAV è già in pullback mentre la MM20 è ancora inerzialmente alta.
+        nav_consistency_ok = rising_days >= 3
+        nav_trend_ok = roc_3d_ok and roc_5d_ok
+        nav_pendenza_ok = nav_trend_ok and nav_consistency_ok
 
         conditions = {
             'price_above_ma': price_above_ma,
@@ -811,15 +851,35 @@ class TechnicalAnalyzer:
             'rsi_prev': round(rsi_prev, 1),
             # Aggregati (per buy_count e retro-compat)
             'trend_ok': trend_ok,
-            # 6a condizione L1
-            'nav_momentum_ok': nav_momentum_ok,
+            # 6a condizione L1 — pendenza NAV grezzo
+            'nav_momentum_ok': nav_momentum_ok,   # retro-compat (= roc_3d > 0)
             'pct_vs_3d': pct_vs_3d,
+            'roc_3d': round(roc_3d, 3),
+            'roc_5d': round(roc_5d, 3),
+            'roc_3d_ok': roc_3d_ok,
+            'roc_5d_ok': roc_5d_ok,
+            'nav_trend_ok': nav_trend_ok,
+            'nav_consistency_ok': nav_consistency_ok,
+            'nav_pendenza_ok': nav_pendenza_ok,
         }
 
         # Segnali uscita L1 (calcolati sempre, usati solo se current_level==1)
-        ma5_below_ma20  = (ma5_current is not None and pd.notna(ma_current)
-                           and ma5_current < float(ma_current))
-        rsi_exhaustion  = rsi_prev > 75 and rsi_current < rsi_prev
+        ma5_below_ma20 = (ma5_current is not None and pd.notna(ma_current)
+                          and ma5_current < float(ma_current))
+
+        # Regola C: RSI esce materialmente dall'ipercomprato (era >=70, ora <70)
+        # Disabilitata per money_market: RSI strutturalmente 80-90, qualsiasi calo è fisiologico
+        if self.asset_type == 'money_market':
+            rsi_exhaustion = False
+        else:
+            rsi_exhaustion = (rsi_prev >= 70 and rsi_current < 70)
+
+        # Regola E: ADX debole (< 20) + NAV sotto MM5 — congiunto per ridurre falsi segnali
+        # Solo equity/commodities; soglia ADX abbassata da 25 a 20 per dare più respiro
+        _adx_exit_threshold = 20
+        _nav_below_ma5 = (ma5_current is not None and current_price < ma5_current)
+        adx_exhausted = (adx_current < _adx_exit_threshold and _nav_below_ma5
+                         and self.asset_type in self.EQUITY_FAMILY)
 
         # Determina livello suggerito
         reason_codes = []
@@ -832,26 +892,14 @@ class TechnicalAnalyzer:
             conditions['daily_change_pct'] = round(daily_change_pct, 2) if daily_change_pct is not None else None
 
         if current_level == 1:
-            # USCITA L1 — 6 REGOLE (in ordine di priorità):
-            # Regola A: NAV < MM20 → stop loss, tesi fallita
-            # Regola B: MM5 < MM20 → trailing stop, rally esaurito
-            # Regola F: MM50 non calcolabile → storico insufficiente
-            # Regola D: MM20 < MM50 → strutturale, trend deteriorato
-            # Regola E: ADX < 25 (solo classi azionarie) → trend perde forza
-            # Regola C: RSI > 75 e piega in giù → stanchezza, vendi in cima
-            if not price_above_ma:
-                conditions['exit_rule'] = 1
-                conditions['exit_trigger'] = f'NAV {float(current_price):.4f} < MM20 {float(ma_current):.4f}'
-                suggested = 3
-                reason = f'Uscita L1 [Regola A — Stop Loss]: NAV sceso sotto MM20'
-                reason_codes.append('L1_EXIT_STOP_LOSS')
-            elif ma5_below_ma20:
-                conditions['exit_rule'] = 2
-                conditions['exit_trigger'] = f'MM5={ma5_current:.4f} < MM20={float(ma_current):.4f}'
-                suggested = 3
-                reason = f'Uscita L1 [Regola B — Trailing Stop]: MM5 ha incrociato MM20 al ribasso'
-                reason_codes.append('L1_EXIT_TRAILING')
-            elif ma50_current is None:
+            # USCITA L1 — 6 REGOLE, gerarchia: F → D → A (equity) → B → E (equity) → C (no MM)
+            # F prima: integrità dati — se MM50 manca qualsiasi segnale è cieco
+            # D seconda: rottura strutturale macro — priorità su tutto il dinamico
+            # A terza: stop loss grezzo, solo equity/commodities (bond: troppo sensibile al noise)
+            # B quarta: trailing universale su MM5 — principale per bond/monetari
+            # E quinta: ADX < 20 + NAV < MM5, solo equity — congiunto per evitare falsi tagli
+            # C ultima: RSI esce materialmente da ipercomprato (≥70 → <70), no money_market
+            if ma50_current is None:
                 conditions['exit_rule'] = 6
                 conditions['exit_trigger'] = f'MM50 non calcolabile (storico < {self.ma_period_slow} giorni)'
                 suggested = 3
@@ -861,20 +909,35 @@ class TechnicalAnalyzer:
                 conditions['exit_rule'] = 4
                 conditions['exit_trigger'] = f'MM20={float(ma_current):.4f} < MM50={float(ma50_current):.4f}'
                 suggested = 3
-                reason = f'Uscita L1 [Regola D — Strutturale MM]: MM20 sceso sotto MM50 — trend a medio termine deteriorato'
+                reason = f'Uscita L1 [Regola D — Strutturale]: MM20 sceso sotto MM50 — trend a medio termine deteriorato'
                 reason_codes.append('L1_EXIT_STRUCTURAL')
-            elif not adx_ok and self.asset_type in self.EQUITY_FAMILY:
-                # Regola E solo per classi azionarie: per bond/HY/alternativi ADX basso è fisiologico
-                conditions['exit_rule'] = 5
-                conditions['exit_trigger'] = f'ADX={adx_current:.0f} < {self.adx_threshold} (soglia)'
+            elif not price_above_ma and self.asset_type in self.EQUITY_FAMILY:
+                # Solo asset volatili: per bond/monetari un singolo giorno sotto MM20 è noise
+                conditions['exit_rule'] = 1
+                conditions['exit_trigger'] = f'NAV {float(current_price):.4f} < MM20 {float(ma_current):.4f}'
                 suggested = 3
-                reason = f'Uscita L1 [Regola E — ADX debole]: ADX={adx_current:.0f} sotto soglia {self.adx_threshold} — trend perde forza'
+                reason = f'Uscita L1 [Regola A — Stop Loss]: NAV sceso sotto MM20 (asset volatile)'
+                reason_codes.append('L1_EXIT_STOP_LOSS')
+            elif ma5_below_ma20:
+                # Trailing universale — principale per bond/monetari, conferma per equity
+                conditions['exit_rule'] = 2
+                conditions['exit_trigger'] = f'MM5={ma5_current:.4f} < MM20={float(ma_current):.4f}'
+                suggested = 3
+                reason = f'Uscita L1 [Regola B — Trailing Stop]: MM5 ha incrociato MM20 al ribasso'
+                reason_codes.append('L1_EXIT_TRAILING')
+            elif adx_exhausted:
+                # ADX < 20 + NAV < MM5: trend indebolito e prezzo già sotto media breve
+                conditions['exit_rule'] = 5
+                conditions['exit_trigger'] = f'ADX={adx_current:.0f} < {_adx_exit_threshold} + NAV < MM5'
+                suggested = 3
+                reason = f'Uscita L1 [Regola E — ADX debole]: ADX={adx_current:.0f} < {_adx_exit_threshold} con NAV sotto MM5'
                 reason_codes.append('L1_EXIT_ADX_WEAK')
             elif rsi_exhaustion:
+                # RSI scende sotto 70 dopo essere stato >=70: uscita materiale dall'ipercomprato
                 conditions['exit_rule'] = 3
-                conditions['exit_trigger'] = f'RSI era {rsi_prev:.0f} > 75, ora {rsi_current:.0f} (↓)'
+                conditions['exit_trigger'] = f'RSI uscito da ipercomprato: era {rsi_prev:.0f}, ora {rsi_current:.0f} (< 70)'
                 suggested = 3
-                reason = f'Uscita L1 [Regola C — Stanchezza]: RSI={rsi_current:.0f} in discesa da {rsi_prev:.0f}'
+                reason = f'Uscita L1 [Regola C — Stanchezza]: RSI={rsi_current:.0f} uscito da ipercomprato (era {rsi_prev:.0f})'
                 reason_codes.append('L1_EXIT_EXHAUSTION')
             else:
                 conditions['exit_rule'] = None
@@ -890,7 +953,7 @@ class TechnicalAnalyzer:
             suggested = 2 if price_above_ma_3days else 3
             reason = f'Storico insufficiente per MM50 (min 50 giorni) — ingresso L1 bloccato'
             reason_codes.append('L2_WATCHLIST' if price_above_ma_3days else 'L3_MONITOR')
-        elif allineamento_ok and persistenza_ok and rsi_optimal and distance_ok and adx_entry_ok and nav_momentum_ok:
+        elif allineamento_ok and persistenza_ok and rsi_optimal and distance_ok and adx_entry_ok and nav_pendenza_ok:
             if kill_switch_active:
                 # Kill switch: tutte le condizioni L1 ok ma blocchiamo il nuovo ingresso
                 suggested = current_level
@@ -1170,7 +1233,7 @@ class TechnicalAnalyzer:
             lc.get('rsi_optimal', False),        # 3. RSI nel range target
             lc.get('distance_ok', False),        # 4. dist max da MM20
             lc.get('adx_entry_ok', lc.get('adx_ok', False)),  # 5. ADX>25 (equity) / esentato (bond)
-            lc.get('nav_momentum_ok', False),    # 6. NAV oggi > NAV 3gg fa (trend breve positivo)
+            lc.get('nav_pendenza_ok', False),    # 6. ROC_3>0 + ROC_5>0 + rising_days≥3
         ])
 
         # Calcola distanza dal max 52 settimane

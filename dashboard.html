@@ -30,8 +30,9 @@
         .level-2 .level-header { background: linear-gradient(90deg, #FFC000, #FFD000); color: #333; }
         .level-3 .level-header { background: linear-gradient(90deg, #4472C4, #5A8FD4); }
         /* Column widths shared between header and tables */
-        .col-nome { width: 23%; } .col-casa { width: 10%; } .col-prezzo { width: 8%; }
-        .col-pct { width: 7%; } .col-ma { width: 8%; } .col-rsi { width: 6%; } .col-buy { width: 6%; } .col-purity { width: 5%; }
+        .col-nome { width: 27%; } .col-prezzo { width: 7%; }
+        .col-pct { width: 6%; } .col-ma { width: 13%; } .col-rsi { width: 5%; } .col-buy { width: 16%; } .col-purity { width: 9%; }
+        .col-gg { width: 6%; } .col-vsent { width: 7%; }
         .purity-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; flex-shrink: 0; }
         .purity-dot.green  { background: #00B050; box-shadow: 0 0 5px #00B050; }
         .purity-dot.yellow { background: #FFC000; box-shadow: 0 0 5px #FFC000; }
@@ -108,7 +109,9 @@
         .pct.pos { color: #00B050; }
         .pct.neg { color: #DC3545; }
         .pct.zero { color: #aaa; }
-        .fund-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+        .fund-name { line-height: 1.3; }
+        .fund-name-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+        .fund-name-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
         .fund-isin { display: block; font-size: 0.72em; color: #666; font-family: monospace; }
         .health-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; cursor: pointer; margin-right: 6px; animation: pulse 2s infinite; }
         .health-dot.green { background: #00B050; box-shadow: 0 0 6px #00B050; }
@@ -247,6 +250,21 @@
         .btn-remove:hover { background: rgba(220,53,69,0.12); }
         .btn-toggle-hist { background: none; border: 1px solid rgba(255,255,255,0.13); color: #777; border-radius: 4px; cursor: pointer; font-size: 0.75em; padding: 2px 7px; transition: all 0.15s; }
         .btn-toggle-hist:hover { color: #fff; border-color: rgba(255,255,255,0.28); }
+        .btn-switch { background: none; border: 1px solid rgba(255,255,255,0.3); color: #ccc; border-radius: 4px; cursor: pointer; font-size: 0.73em; padding: 2px 6px; transition: all 0.15s; white-space: nowrap; }
+        .btn-switch:hover { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.5); }
+        .btn-exit { background: none; border: 1px solid rgba(220,53,69,0.4); color: #DC3545; border-radius: 4px; cursor: pointer; font-size: 0.73em; padding: 2px 6px; transition: all 0.15s; white-space: nowrap; }
+        .btn-exit:hover { background: rgba(220,53,69,0.12); border-color: #DC3545; }
+        .btn-edit-ev { background: none; border: 1px solid rgba(255,193,0,0.35); color: #FFC000; border-radius: 4px; cursor: pointer; font-size: 0.73em; padding: 2px 6px; transition: all 0.15s; white-space: nowrap; }
+        .btn-edit-ev:hover { background: rgba(255,193,0,0.1); border-color: #FFC000; }
+        .pf-row-exited > td { opacity: 0.55; }
+        .pf-row-exited > td:first-child { opacity: 0.55; }
+        .badge-exited { display:inline-block; font-size:0.65em; background:rgba(220,53,69,0.2); color:#DC3545; border-radius:4px; padding:1px 5px; margin-left:4px; vertical-align:middle; font-weight:bold; letter-spacing:0.3px; }
+        .badge-switch { display:inline-block; font-size:0.65em; background:rgba(255,255,255,0.12); color:#aaa; border-radius:4px; padding:1px 5px; margin-left:2px; vertical-align:middle; }
+        /* modal events table */
+        .ev-table { width:100%; border-collapse:collapse; font-size:0.82em; margin-top:10px; }
+        .ev-table th { padding:5px 8px; color:#666; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.08); text-align:left; font-size:0.8em; }
+        .ev-table td { padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.04); color:#bbb; vertical-align:middle; }
+        .modal-box-wide { background: #16213e; border: 1px solid rgba(255,255,255,0.15); border-radius: 14px; padding: 24px 26px; width: 560px; max-width: 96vw; box-shadow: 0 16px 48px rgba(0,0,0,0.6); max-height: 90vh; overflow-y: auto; }
         /* ── Fund Detail Modal ── */
         .detail-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.78); z-index: 1100; backdrop-filter: blur(5px); align-items: flex-start; justify-content: center; overflow-y: auto; padding: 20px 10px; }
         .detail-overlay.open { display: flex; }
@@ -400,6 +418,125 @@
         </div>
     </div>
 
+    <!-- Modal Switch -->
+    <div class="modal-overlay" id="switchModal" onclick="if(event.target===this)closeSwitchModal()">
+        <div class="modal-box-wide">
+            <h3>&#8644; Switch Parziale</h3>
+            <div id="switchFundLabel" style="font-size:0.82em;color:#5A8FD4;font-weight:bold;margin-bottom:16px;"></div>
+            <input type="hidden" id="swIsin">
+
+            <div style="font-size:0.72em;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;border-left:2px solid #00B050;padding-left:6px;">Fondo di Partenza</div>
+            <div style="display:flex;gap:12px;margin-bottom:16px;">
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>Data NAV partenza</label>
+                    <input type="date" id="swDate">
+                </div>
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>NAV partenza</label>
+                    <input type="number" id="swPrice" step="0.0001" min="0" placeholder="es. 202.6053">
+                </div>
+            </div>
+
+            <div style="font-size:0.72em;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;border-left:2px solid #FFC000;padding-left:6px;">Fondo di Destinazione</div>
+            <div class="modal-field">
+                <label>Nome fondo destinazione</label>
+                <input type="text" id="swTargetName" placeholder="es. Schroder Euro Liquidity">
+            </div>
+            <div class="modal-field">
+                <label>ISIN destinazione (opzionale)</label>
+                <input type="text" id="swTargetIsin" placeholder="es. LU0136043394" style="font-family:monospace;font-size:0.82em;">
+            </div>
+            <div style="display:flex;gap:12px;margin-bottom:14px;">
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>Data sottoscrizione destinazione</label>
+                    <input type="date" id="swTargetDate">
+                </div>
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>NAV destinazione</label>
+                    <input type="number" id="swTargetPrice" step="0.0001" min="0" placeholder="es. 12.3456">
+                </div>
+            </div>
+
+            <div class="modal-field">
+                <label>Note (opzionale)</label>
+                <input type="text" id="swNotes" placeholder="es. Switch 80% verso MM">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeSwitchModal()">Annulla</button>
+                <button class="btn-primary" style="background:#555;border:1px solid rgba(255,255,255,0.3);" onclick="submitSwitch()">Registra Switch</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Vendi / Uscita -->
+    <div class="modal-overlay" id="exitModal" onclick="if(event.target===this)closeExitModal()">
+        <div class="modal-box">
+            <h3>&#128683; Registra Uscita</h3>
+            <div id="exitFundLabel" style="font-size:0.8em;color:#aaa;margin-bottom:14px;"></div>
+            <input type="hidden" id="exIsin">
+            <div class="modal-field">
+                <label>Data Vendita</label>
+                <input type="date" id="exDate">
+            </div>
+            <div class="modal-field">
+                <label>NAV Vendita</label>
+                <input type="number" id="exPrice" step="0.0001" min="0" placeholder="es. 13.2000">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeExitModal()">Annulla</button>
+                <button class="btn-primary" style="background:#DC3545;" onclick="submitExit()">Conferma Uscita</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Modifica Eventi -->
+    <div class="modal-overlay" id="editEventsModal" onclick="if(event.target===this)closeEditEventsModal()">
+        <div class="modal-box-wide">
+            <h3 style="color:#FFC000;">&#9998; Modifica Posizione</h3>
+            <div id="editEvFundLabel" style="font-size:0.8em;color:#aaa;margin-bottom:12px;"></div>
+            <input type="hidden" id="eeIsin">
+
+            <!-- Entrata -->
+            <div style="font-size:0.75em;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Entrata</div>
+            <div style="display:flex;gap:10px;margin-bottom:16px;align-items:flex-end;">
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>Data Acquisto</label>
+                    <input type="date" id="eeEntryDate">
+                </div>
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>NAV Acquisto</label>
+                    <input type="number" id="eeEntryPrice" step="0.0001" min="0">
+                </div>
+                <button class="btn-edit-ev" onclick="saveEntryEdit()" style="padding:6px 10px;font-size:0.8em;">Salva</button>
+            </div>
+
+            <!-- Uscita (se presente) -->
+            <div id="eeExitSection" style="display:none;">
+                <div style="font-size:0.75em;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Uscita Registrata</div>
+                <div style="display:flex;gap:10px;margin-bottom:16px;align-items:flex-end;">
+                    <div class="modal-field" style="flex:1;margin-bottom:0;">
+                        <label>Data Uscita</label>
+                        <input type="date" id="eeExitDate">
+                    </div>
+                    <div class="modal-field" style="flex:1;margin-bottom:0;">
+                        <label>NAV Uscita</label>
+                        <input type="number" id="eeExitPrice" step="0.0001" min="0">
+                    </div>
+                    <button class="btn-edit-ev" onclick="saveExitEdit()" style="padding:6px 10px;font-size:0.8em;">Salva</button>
+                    <button class="btn-remove" onclick="reactivateFund()" style="padding:6px 8px;font-size:0.8em;" title="Riapri posizione">&#8635;</button>
+                </div>
+            </div>
+
+            <!-- Switch Events -->
+            <div style="font-size:0.75em;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin:4px 0 8px;">Switch Registrati</div>
+            <div id="eeEventsList" style="min-height:30px;"></div>
+
+            <div class="modal-actions" style="margin-top:14px;">
+                <button class="btn-cancel" onclick="closeEditEventsModal()">Chiudi</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Dettaglio Fondo -->
     <div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
         <div class="detail-box">
@@ -464,8 +601,8 @@
 
     <div class="column-header">
         <table>
-            <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
-            <tr><th>Fondo</th><th>Casa / Cat.</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity: fedeltà al benchmark">Fedeltà</th></tr>
+            <colgroup><col class="col-nome"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
+            <tr><th>Fondo</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity: fedeltà al benchmark">Fedeltà</th></tr>
         </table>
     </div>
 
@@ -509,15 +646,15 @@
             <strong>L1 "Trend Sicuro" - Condizioni ENTRATA (6/6 richieste):</strong>
             A. Allineamento: MM20 &gt; MM50 e NAV &gt; MM20 |
             P. Persistenza: NAV sopra MM20 per 5+ gg consecutivi, slope&uarr; |
-            M. Momentum RSI: RSI 55–65 |
-            D. Distanza: NAV max 2.5% sopra MM20 |
-            X. ADX: ADX(14) &gt; 25 (forza trend) |
-            T. Trend breve: NAV oggi &gt; NAV 3 giorni fa
+            M. Momentum RSI: RSI nel range ottimale per classe |
+            D. Distanza: NAV non troppo esteso sopra MM20 |
+            X. ADX: ADX(14) &gt; 25 (solo equity) |
+            N. Pendenza NAV: ROC 3gg &gt; 0 + ROC 5gg &gt; 0 + almeno 3 giorni in rialzo su 5 (blocca ingressi con NAV già in discesa)
             <br>
             <strong>Uscita L1:</strong>
             A. Stop Loss: NAV &lt; MM20 &nbsp;|&nbsp;
             B. Trailing Stop: MM5 &lt; MM20 &nbsp;|&nbsp;
-            C. Stanchezza: RSI era &gt;75 e piega verso il basso &nbsp;|&nbsp;
+            C. Stanchezza: RSI era &gt;75 (equity) / &gt;92 (monetari) e piega verso il basso &nbsp;|&nbsp;
             D. Strutturale: MM20 &lt; MM50 &nbsp;|&nbsp;
             E. ADX &lt; 25 (solo equity) &nbsp;|&nbsp;
             F. MM50 non calcolabile
@@ -527,10 +664,10 @@
             <div class="level-header"><span>LIVELLO 1 — Core Portfolio</span><span id="l1Count">0 fondi</span></div>
             <table class="fund-table l1-table" style="table-layout:fixed;width:100%;">
                 <colgroup>
-                    <col style="width:27%"><col style="width:7%">
-                    <col style="width:6%"><col style="width:6%"><col style="width:6%">
-                    <col style="width:6%"><col style="width:7%">
-                    <col style="width:5%"><col style="width:16%"><col style="width:9%">
+                    <col class="col-nome"><col class="col-prezzo">
+                    <col class="col-pct"><col class="col-pct"><col class="col-pct">
+                    <col class="col-gg"><col class="col-vsent">
+                    <col class="col-rsi"><col class="col-buy"><col class="col-purity">
                 </colgroup>
                 <thead><tr>
                     <th>Fondo</th><th>Prezzo</th>
@@ -571,8 +708,8 @@
         <div class="level-section level-2">
             <div class="level-header"><span>LIVELLO 2 — Watchlist</span><span id="l2Count">0 fondi</span></div>
             <table class="fund-table">
-                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
-                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity">Fed.</th></tr></thead>
+                <colgroup><col class="col-nome"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
+                <thead><tr><th>Fondo</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity">Fed.</th></tr></thead>
                 <tbody id="level2Body"></tbody>
             </table>
         </div>
@@ -580,8 +717,8 @@
         <div class="level-section level-3">
             <div class="level-header"><span>LIVELLO 3 — Universe</span><span id="l3Count">0 fondi</span></div>
             <table class="fund-table">
-                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
-                <thead><tr><th>Fondo</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity">Fed.</th></tr></thead>
+                <colgroup><col class="col-nome"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"><col class="col-purity"></colgroup>
+                <thead><tr><th>Fondo</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>Dist%</th><th>RSI</th><th>Cond.</th><th title="Signal Purity">Fed.</th></tr></thead>
                 <tbody id="level3Body"></tbody>
             </table>
         </div>
@@ -629,14 +766,14 @@
                             <td class="param-name">Esempi categoria</td>
                             <td style="color:#666;font-size:0.82em">Europa, USA, Globale</td>
                             <td style="color:#666;font-size:0.82em">EM, Asia, BRIC</td>
-                            <td style="color:#666;font-size:0.82em">Tech, Healthcare, Real Estate</td>
+                            <td style="color:#666;font-size:0.82em">Tech, Healthcare, Biotech, Cyber, Acqua, Food, AI, Robotica</td>
                             <td style="color:#666;font-size:0.82em">Oro, Petrolio, Commodities</td>
                         </tr>
                         <tr>
                             <td class="param-name">RSI entrata L1</td>
                             <td class="val-eq">55 – 65</td>
                             <td class="val-em">55 – 65</td>
-                            <td class="val-sect">54 – 66</td>
+                            <td class="val-sect">54 – 70</td>
                             <td class="val-comm">54 – 66</td>
                         </tr>
                         <tr>
@@ -657,7 +794,7 @@
                             <td class="param-name">Distanza max MM20</td>
                             <td class="val-eq">2.5%</td>
                             <td class="val-em">3.0%</td>
-                            <td class="val-sect">2.5%</td>
+                            <td class="val-sect">3.5% <span style="font-size:0.78em;color:#aaa">(5% breakout)</span></td>
                             <td class="val-comm">3.0%</td>
                         </tr>
                         <tr>
@@ -704,13 +841,13 @@
                         </tr>
                         <tr>
                             <td class="param-name">RSI entrata L1</td>
-                            <td class="val-bond">48 – 58</td>
-                            <td class="val-corp">50 – 60</td>
-                            <td class="val-hy">52 – 63</td>
+                            <td class="val-bond">45 – 68</td>
+                            <td class="val-corp">48 – 65</td>
+                            <td class="val-hy">50 – 66</td>
                         </tr>
                         <tr>
                             <td class="param-name">RSI oversold (L0)</td>
-                            <td class="val-bond">&lt; 38</td>
+                            <td class="val-bond">&lt; 35</td>
                             <td class="val-corp">&lt; 35</td>
                             <td class="val-hy">&lt; 33</td>
                         </tr>
@@ -747,8 +884,8 @@
                     </tbody>
                 </table>
 
-                <!-- L1 entrata - 5 condizioni -->
-                <div class="param-section-title" style="margin-top:16px;">L1 "Trend Sicuro" — 5 Condizioni di Entrata (tutte richieste)</div>
+                <!-- L1 entrata - 6 condizioni -->
+                <div class="param-section-title" style="margin-top:16px;">L1 "Trend Sicuro" — 6 Condizioni di Entrata (tutte richieste)</div>
                 <table class="param-table">
                     <tbody>
                         <tr>
@@ -766,13 +903,17 @@
                         </tr>
                         <tr>
                             <td class="param-name"><strong style="color:#fff">4</strong></td>
-                            <td><strong>Distanza MM20:</strong> NAV non pi&ugrave; di X% sopra MM20 (vedi tabelle sopra)</td>
+                            <td><strong>Distanza MM20:</strong> NAV non pi&ugrave; di X% sopra MM20 (vedi tabelle sopra) &mdash; <span style="color:#aaa;font-size:0.9em">per settoriali: soglia sale a 5% in caso di breakout giornaliero &ge;+3.5%</span></td>
                         </tr>
                         <tr>
                             <td class="param-name"><strong style="color:#fff">5</strong></td>
                             <td><strong>Forza trend:</strong> ADX(14) &gt; 25
                                 &nbsp;<span class="profile-tag eq">azionari sviluppati</span><span class="profile-tag em">EM equity</span><span class="profile-tag sect">settoriali</span><span class="profile-tag comm">commodities</span>
                                 &nbsp;<span class="val-na" style="font-size:0.88em">— non applicato a obbligazionari</span></td>
+                        </tr>
+                        <tr>
+                            <td class="param-name"><strong style="color:#fff">6</strong></td>
+                            <td><strong>Pendenza NAV:</strong> ROC 3gg &gt; 0 + ROC 5gg &gt; 0 + almeno 3 giorni in rialzo su 5 — <em>blocca ingressi quando il NAV grezzo è già in discesa verso MM20</em></td>
                         </tr>
                     </tbody>
                 </table>
@@ -782,7 +923,7 @@
                 <div class="exit-grid">
                     <div class="exit-item exit-l1"><span class="exit-label">A.</span> Stop Loss: NAV &lt; MM20</div>
                     <div class="exit-item exit-l1"><span class="exit-label">B.</span> Trailing Stop: MM5 &lt; MM20</div>
-                    <div class="exit-item exit-l1"><span class="exit-label">C.</span> Stanchezza: RSI era &gt;75 e piega verso il basso</div>
+                    <div class="exit-item exit-l1"><span class="exit-label">C.</span> Stanchezza: RSI era &gt;75 (equity) / &gt;92 (monetari) e piega verso il basso</div>
                     <div class="exit-item exit-l1"><span class="exit-label">D.</span> Strutturale: MM20 &lt; MM50 (inversione)</div>
                     <div class="exit-item exit-l1"><span class="exit-label">E.</span> ADX &lt; 25 — <em>solo classi azionarie</em></div>
                     <div class="exit-item exit-l1"><span class="exit-label">F.</span> MM50 non calcolabile (storico insufficiente)</div>
@@ -956,8 +1097,11 @@
                 const priceAboveStop = f.price && f.panic_low && f.price > f.panic_low;
                 const stopStyle = priceAboveStop ? 'color:#888' : 'color:#DC3545;font-weight:bold;text-shadow:0 0 4px #DC3545';
                 const entryDate = f.entry_date ? f.entry_date.substring(0, 10) : '-';
+                const isin0 = f.isin || '';
+                const inPf0 = portfolioIsins.has(isin0);
+                const pfBtn0 = isin0 ? `<button class="btn-portfolio-add ${inPf0?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin0}')" title="${inPf0?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf0?'&#10003;':'+ Port.'}</button>` : '';
                 return `<tr style="cursor:pointer;" onclick="openFundDetail('${f.isin}')">
-                    <td class="fund-name" title="${f.isin}">${f.nome || '-'}<span class="fund-isin">${f.isin}</span></td>
+                    <td class="fund-name" title="${f.nome||f.isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || '-'}</span>${pfBtn0}</div><span class="fund-isin">${f.isin}</span></td>
                     <td>${f.casa || '-'}</td>
                     <td style="text-align:center;color:#FF8F00;font-weight:bold;">${f.days_in_l0 || '-'}</td>
                     <td>${f.entry_price ? f.entry_price.toFixed(4) : '-'}</td>
@@ -1053,7 +1197,7 @@
                 // Conditions
                 const c = f.conditions || {};
                 const bc = f.buy_count || 0;
-                const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_momentum_ok?'<span style="color:#0f0" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>':'<span style="color:#555" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>'}</span>`;
+                const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_pendenza_ok?'<span style="color:#0f0" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>':'<span style="color:#555" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>'}</span>`;
 
                 const fmtPct = v => {
                     if (v == null) return '<td class="pct zero">—</td>';
@@ -1064,7 +1208,7 @@
                 const pfBtn = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
 
                 return `<tr onclick="openFundDetail('${isin}')">
-                    <td class="fund-name" title="${isin}">${f.nome || isin}${nuovoBadge}${exitWarn}${pfBtn}<span class="fund-isin">${isin}</span></td>
+                    <td class="fund-name" title="${f.nome||isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || isin}${nuovoBadge}${exitWarn}</span>${pfBtn}</div><span class="fund-isin">${isin}</span></td>
                     <td>${f.price ? f.price.toFixed(2) : '—'}</td>
                     ${fmtPct(f.pct_1d)}${fmtPct(f.pct_1w)}${fmtPct(f.pct_1m)}
                     <td style="text-align:center">${daysHtml}</td>
@@ -1125,7 +1269,7 @@
             document.getElementById(`l${level}Count`).textContent = `${filtered.length} fondi`;
 
             if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="10" class="empty-msg">Nessun fondo in questo livello</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="empty-msg">Nessun fondo in questo livello</td></tr>`;
                 return;
             }
 
@@ -1147,7 +1291,6 @@
                 } else if (level === 2 && bc >= 4) {
                     procintoHtml = `<span class="badge-procinto p4" title="${bc}/6 condizioni L1 soddisfatte">⚡ ${bc}/6</span>`;
                 }
-                const secondCol = level === 3 ? f.categoria : f.casa;
                 const fmtPct = v => {
                     if (v == null) return '<td class="pct zero">—</td>';
                     const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
@@ -1169,11 +1312,10 @@
                     : `<span class="purity-badge grey" title="Dati insufficienti">N/D</span>`;
                 // Conditions dots
                 const c = f.conditions || {};
-                const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_momentum_ok?'<span style="color:#0f0" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>':'<span style="color:#555" title="Trend breve: NAV oggi > NAV 3gg fa">T</span>'}</span>`;
+                const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_pendenza_ok?'<span style="color:#0f0" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>':'<span style="color:#555" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>'}</span>`;
 
                 return `<tr onclick="openFundDetail('${isin}')">
-                    <td class="fund-name" title="${isin}">${f.nome || '—'}${assetTag}${procintoHtml}${pfBtn}<span class="fund-isin">${isin}</span></td>
-                    <td style="font-size:0.82em;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${secondCol||''}">${secondCol || '—'}</td>
+                    <td class="fund-name" title="${f.nome||isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || '—'}${assetTag}${procintoHtml}</span>${pfBtn}</div><span class="fund-isin">${isin}</span></td>
                     <td>${f.price ? f.price.toFixed(2) : '—'}</td>
                     ${fmtPct(f.pct_1d)}${fmtPct(f.pct_1w)}${fmtPct(f.pct_1m)}
                     ${distStr}
@@ -1274,8 +1416,10 @@
                 const res = await fetch('/api/portfolio');
                 const data = await res.json();
                 const pf = data.portfolio || [];
-                portfolioIsins = new Set(pf.map(p => p.isin));
-                document.getElementById('portfolioCount').textContent = pf.length + ' fond' + (pf.length === 1 ? 'o' : 'i');
+                portfolioData = pf;
+                portfolioIsins = new Set(pf.filter(p => p.status !== 'exited').map(p => p.isin));
+                const activeCount = pf.filter(p => p.status !== 'exited').length;
+                document.getElementById('portfolioCount').textContent = activeCount + ' fond' + (activeCount === 1 ? 'o' : 'i') + (pf.length > activeCount ? ' (+' + (pf.length - activeCount) + ' usciti)' : '');
                 renderPortfolio(pf);
             } catch(e) {
                 console.error('Portfolio load error', e);
@@ -1290,16 +1434,16 @@
             }
             content.innerHTML = `<table class="portfolio-table">
                 <thead><tr>
-                    <th style="width:30%">Fondo</th>
-                    <th style="width:10%">Acquisto</th>
-                    <th style="width:9%">NAV Acq.</th>
-                    <th style="width:9%">NAV Att.</th>
-                    <th style="width:9%">Perf %</th>
+                    <th style="width:26%">Fondo</th>
+                    <th style="width:9%">Acquisto</th>
+                    <th style="width:8%">NAV Acq.</th>
+                    <th style="width:8%">NAV Att.</th>
+                    <th style="width:8%">Perf %</th>
                     <th style="width:5%;text-align:center">Liv.</th>
-                    <th style="width:6%;text-align:center">RSI</th>
-                    <th style="width:8%;text-align:center">Dist MM20</th>
-                    <th style="width:7%;text-align:center">Storico</th>
-                    <th style="width:7%;text-align:center">Rimuovi</th>
+                    <th style="width:5%;text-align:center">RSI</th>
+                    <th style="width:7%;text-align:center">Dist MM20</th>
+                    <th style="width:6%;text-align:center">Storico</th>
+                    <th style="width:18%;text-align:center">Azioni</th>
                 </tr></thead>
                 <tbody id="portfolioTableBody"></tbody>
             </table>`;
@@ -1312,22 +1456,32 @@
                 const rsiCls = p.rsi < 30 ? 'low' : p.rsi > 70 ? 'high' : 'mid';
                 const distStr = p.dist_mm20 != null ? (p.dist_mm20 > 0 ? '+' : '') + parseFloat(p.dist_mm20).toFixed(1) + '%' : '-';
                 const distCls = p.dist_mm20 > 0 ? 'pos' : p.dist_mm20 < 0 ? 'neg' : 'zero';
-                const navAtt = p.current_nav != null ? parseFloat(p.current_nav).toFixed(4) : '-';
+                const isExited = p.status === 'exited';
+                const navAtt = isExited
+                    ? (p.exit_price != null ? parseFloat(p.exit_price).toFixed(4) : '-')
+                    : (p.current_nav != null ? parseFloat(p.current_nav).toFixed(4) : '-');
                 const navAcq = p.entry_price != null ? parseFloat(p.entry_price).toFixed(4) : '-';
                 const lv = p.level;
                 const levBadge = lv ? `<span style="font-weight:bold;color:${lv===1?'#00B050':lv===2?'#FFC000':'#5A8FD4'}">L${lv}</span>` : '-';
                 const isin = p.isin;
-                return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openFundDetail('${isin}',{entry_price:${p.entry_price},entry_date:'${p.entry_date}'})">
-                    <td class="fund-name" title="${isin}">${p.fund_name || isin}<span class="fund-isin">${isin}</span></td>
+                const exitedBadge = isExited ? `<span class="badge-exited">USCITO ${p.exit_date||''}</span>` : '';
+                const actionBtns = isExited
+                    ? `<button class="btn-edit-ev" onclick="event.stopPropagation();openEditEventsModal('${isin}')" title="Modifica">&#9998;</button>
+                       <button class="btn-remove" onclick="event.stopPropagation();removeFromPortfolio('${isin}')" title="Rimuovi definitivamente" style="margin-left:4px;">&#10005;</button>`
+                    : `<button class="btn-switch" onclick="event.stopPropagation();openSwitchModal('${isin}')" title="Registra Switch">&#8644; Switch</button>
+                       <button class="btn-exit" onclick="event.stopPropagation();openExitModal('${isin}')" title="Registra Uscita" style="margin-left:4px;">&#128683; Vendi</button>
+                       <button class="btn-edit-ev" onclick="event.stopPropagation();openEditEventsModal('${isin}')" title="Modifica" style="margin-left:4px;">&#9998;</button>`;
+                return `<tr id="pf-row-${isin}" class="${isExited?'pf-row-exited':''}" style="cursor:pointer;" onclick="openFundDetail('${isin}',{entry_price:${p.entry_price},entry_date:'${p.entry_date}'})">
+                    <td class="fund-name" title="${isin}">${p.fund_name || isin}${exitedBadge}<span class="fund-isin">${isin}</span></td>
                     <td style="color:#888;font-size:0.83em;">${p.entry_date || '-'}</td>
                     <td style="font-family:monospace;font-size:0.85em;">${navAcq}</td>
-                    <td style="font-family:monospace;font-size:0.85em;">${navAtt}</td>
+                    <td style="font-family:monospace;font-size:0.85em;${isExited?'color:#DC3545;':''}">${navAtt}${isExited?'<span style="font-size:0.7em;color:#888;margin-left:2px;">exit</span>':''}</td>
                     <td><span class="perf-badge ${perfCls}">${perfStr}</span></td>
-                    <td style="text-align:center;">${levBadge}</td>
-                    <td class="rsi ${rsiCls}" style="text-align:center;">${rsiVal}</td>
-                    <td class="pct ${distCls}" style="text-align:center;font-size:0.88em;">${distStr}</td>
+                    <td style="text-align:center;">${isExited ? '<span style="color:#555;">—</span>' : levBadge}</td>
+                    <td class="rsi ${rsiCls}" style="text-align:center;">${isExited ? '—' : rsiVal}</td>
+                    <td class="pct ${distCls}" style="text-align:center;font-size:0.88em;">${isExited ? '—' : distStr}</td>
                     <td style="text-align:center;"><button class="btn-toggle-hist" onclick="event.stopPropagation();toggleFundHistory('${isin}')" id="btn-hist-${isin}">&#9660; 30gg</button></td>
-                    <td style="text-align:center;"><button class="btn-remove" onclick="event.stopPropagation();removeFromPortfolio('${isin}')" title="Rimuovi dal portafoglio">&#10005;</button></td>
+                    <td style="text-align:center;">${actionBtns}</td>
                 </tr>
                 <tr class="history-row" id="pf-hist-${isin}" style="display:none;">
                     <td colspan="10"><div id="hist-wrap-${isin}" style="padding:12px;color:#555;text-align:center;font-size:0.8em;">Caricamento...</div></td>
@@ -1407,6 +1561,242 @@
 
         function closePortfolioModal() {
             document.getElementById('portfolioModal').classList.remove('open');
+        }
+
+        // ── Switch Modal ────────────────────────────────────────────────────
+        let _switchIsin = null;
+        function openSwitchModal(isin) {
+            _switchIsin = isin;
+            const p = (portfolioData || []).find(x => x.isin === isin) || {};
+            document.getElementById('swIsin').value = isin;
+            document.getElementById('switchFundLabel').textContent = p.fund_name || isin;
+            document.getElementById('swDate').value = '';
+            document.getElementById('swPrice').value = '';
+            document.getElementById('swTargetDate').value = '';
+            document.getElementById('swTargetPrice').value = '';
+            document.getElementById('swTargetName').value = '';
+            document.getElementById('swTargetIsin').value = '';
+            document.getElementById('swNotes').value = '';
+            document.getElementById('switchModal').classList.add('open');
+            setTimeout(() => document.getElementById('swDate').focus(), 100);
+        }
+        function closeSwitchModal() {
+            document.getElementById('switchModal').classList.remove('open');
+            _switchIsin = null;
+        }
+        async function submitSwitch() {
+            const isin = document.getElementById('swIsin').value;
+            const date = document.getElementById('swDate').value;
+            const price = parseFloat(document.getElementById('swPrice').value);
+            const targetDate = document.getElementById('swTargetDate').value;
+            const targetPrice = parseFloat(document.getElementById('swTargetPrice').value);
+            const targetName = document.getElementById('swTargetName').value.trim();
+            const targetIsin = document.getElementById('swTargetIsin').value.trim();
+            const notes = document.getElementById('swNotes').value.trim();
+            if (!date) { alert('Inserisci la data NAV del fondo di partenza'); return; }
+            const payload = {
+                event_date: date,
+                event_price: isNaN(price) || price <= 0 ? null : price,
+                target_date: targetDate || null,
+                target_price: isNaN(targetPrice) || targetPrice <= 0 ? null : targetPrice,
+                target_fund_name: targetName || null,
+                target_isin: targetIsin || null,
+                notes: notes || null
+            };
+            try {
+                const res = await fetch('/api/portfolio/' + isin + '/switch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                let d = {};
+                try { d = await res.json(); } catch(e) {}
+                if (res.ok) {
+                    closeSwitchModal();
+                    portfolioEventsCache = {};
+                    detailCache = {};
+                    loadPortfolio();
+                } else {
+                    alert('Errore: ' + (d.error || 'HTTP ' + res.status));
+                }
+            } catch(e) { alert('Errore rete: ' + e.message); }
+        }
+
+        // ── Exit (Vendi) Modal ──────────────────────────────────────────────
+        let _exitIsin = null;
+        function openExitModal(isin) {
+            _exitIsin = isin;
+            const p = (portfolioData || []).find(x => x.isin === isin) || {};
+            document.getElementById('exIsin').value = isin;
+            document.getElementById('exitFundLabel').textContent = p.fund_name || isin;
+            document.getElementById('exDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('exPrice').value = p.current_nav ? parseFloat(p.current_nav).toFixed(4) : '';
+            document.getElementById('exitModal').classList.add('open');
+            setTimeout(() => document.getElementById('exPrice').focus(), 100);
+        }
+        function closeExitModal() {
+            document.getElementById('exitModal').classList.remove('open');
+            _exitIsin = null;
+        }
+        async function submitExit() {
+            const isin = document.getElementById('exIsin').value;
+            const date = document.getElementById('exDate').value;
+            const price = parseFloat(document.getElementById('exPrice').value);
+            if (!date || isNaN(price) || price <= 0) { alert('Compila data e NAV'); return; }
+            if (!confirm('Confermi l\'uscita da ' + isin + ' al NAV ' + price.toFixed(4) + '?')) return;
+            try {
+                const res = await fetch('/api/portfolio/' + isin + '/exit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({exit_date: date, exit_price: price})
+                });
+                let d = {};
+                try { d = await res.json(); } catch(e) { /* ignore parse error */ }
+                if (res.ok) {
+                    closeExitModal();
+                    portfolioEventsCache = {};
+                    detailCache = {};
+                    historyCache = {};
+                    loadPortfolio();
+                } else {
+                    alert('Errore: ' + (d.error || 'HTTP ' + res.status));
+                }
+            } catch(e) { alert('Errore rete: ' + e.message); }
+        }
+
+        // ── Edit Events Modal ───────────────────────────────────────────────
+        let _editIsin = null;
+        let portfolioEventsCache = {};
+        let portfolioData = [];
+
+        function openEditEventsModal(isin) {
+            _editIsin = isin;
+            const p = (portfolioData || []).find(x => x.isin === isin) || {};
+            document.getElementById('eeIsin').value = isin;
+            document.getElementById('editEvFundLabel').textContent = p.fund_name || isin;
+            document.getElementById('eeEntryDate').value = p.entry_date || '';
+            document.getElementById('eeEntryPrice').value = p.entry_price ? parseFloat(p.entry_price).toFixed(4) : '';
+            // Sezione uscita
+            if (p.status === 'exited' && p.exit_date) {
+                document.getElementById('eeExitSection').style.display = 'block';
+                document.getElementById('eeExitDate').value = p.exit_date;
+                document.getElementById('eeExitPrice').value = p.exit_price ? parseFloat(p.exit_price).toFixed(4) : '';
+            } else {
+                document.getElementById('eeExitSection').style.display = 'none';
+            }
+            document.getElementById('editEventsModal').classList.add('open');
+            loadEditEvents(isin);
+        }
+
+        async function loadEditEvents(isin) {
+            const list = document.getElementById('eeEventsList');
+            list.innerHTML = '<div style="color:#555;font-size:0.8em;">Caricamento...</div>';
+            try {
+                const res = await fetch('/api/portfolio/events/' + isin);
+                const data = await res.json();
+                const evs = (data.events || []).filter(e => e.event_type === 'switch');
+                portfolioEventsCache[isin] = data.events || [];
+                if (evs.length === 0) {
+                    list.innerHTML = '<div style="color:#444;font-size:0.8em;padding:6px 0;">Nessuno switch registrato.</div>';
+                    return;
+                }
+                list.innerHTML = `<table class="ev-table">
+                    <thead><tr>
+                        <th>Data Partenza</th><th>NAV Partenza</th>
+                        <th>Data Destinaz.</th><th>NAV Destinaz.</th>
+                        <th>Destinazione</th><th></th>
+                    </tr></thead>
+                    <tbody>${evs.map(ev => `
+                        <tr id="ev-row-${ev.id}">
+                            <td><input type="date" value="${ev.event_date}" id="ev-date-${ev.id}" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;padding:2px 5px;font-size:0.85em;width:108px;"></td>
+                            <td><input type="number" value="${ev.event_price||''}" id="ev-price-${ev.id}" step="0.0001" placeholder="—" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;padding:2px 5px;font-size:0.85em;width:80px;"></td>
+                            <td><input type="date" value="${ev.target_date||''}" id="ev-tdate-${ev.id}" style="background:transparent;border:1px solid rgba(255,193,0,0.2);border-radius:4px;color:#FFC000;padding:2px 5px;font-size:0.85em;width:108px;"></td>
+                            <td><input type="number" value="${ev.target_price||''}" id="ev-tprice-${ev.id}" step="0.0001" placeholder="—" style="background:transparent;border:1px solid rgba(255,193,0,0.2);border-radius:4px;color:#FFC000;padding:2px 5px;font-size:0.85em;width:80px;"></td>
+                            <td style="color:#aaa;font-size:0.85em;">${ev.target_fund_name||ev.target_isin||'—'}</td>
+                            <td style="white-space:nowrap;">
+                                <button class="btn-edit-ev" onclick="saveEventEdit(${ev.id})" style="padding:2px 6px;">&#10003;</button>
+                                <button class="btn-remove" onclick="deleteEvent(${ev.id},'${isin}')" style="padding:2px 6px;margin-left:3px;">&#10005;</button>
+                            </td>
+                        </tr>`).join('')}
+                    </tbody></table>`;
+            } catch(e) {
+                list.innerHTML = '<div style="color:#DC3545;font-size:0.8em;">Errore caricamento eventi</div>';
+            }
+        }
+
+        async function saveEntryEdit() {
+            const isin = document.getElementById('eeIsin').value;
+            const date = document.getElementById('eeEntryDate').value;
+            const price = parseFloat(document.getElementById('eeEntryPrice').value);
+            if (!date || isNaN(price) || price <= 0) { alert('Dati non validi'); return; }
+            const res = await fetch('/api/portfolio/' + isin, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({entry_date: date, entry_price: price})
+            });
+            if (res.ok) { portfolioEventsCache = {}; detailCache = {}; loadPortfolio(); }
+            else { const d = await res.json(); alert('Errore: ' + (d.error||'?')); }
+        }
+
+        async function saveExitEdit() {
+            const isin = document.getElementById('eeIsin').value;
+            const date = document.getElementById('eeExitDate').value;
+            const price = parseFloat(document.getElementById('eeExitPrice').value);
+            if (!date || isNaN(price) || price <= 0) { alert('Dati non validi'); return; }
+            const res = await fetch('/api/portfolio/' + isin + '/exit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({exit_date: date, exit_price: price})
+            });
+            if (res.ok) { portfolioEventsCache = {}; detailCache = {}; historyCache = {}; loadPortfolio(); }
+            else { const d = await res.json(); alert('Errore: ' + (d.error||'?')); }
+        }
+
+        async function reactivateFund() {
+            const isin = document.getElementById('eeIsin').value;
+            if (!confirm('Riapri la posizione su ' + isin + '? (annulla l\'uscita registrata)')) return;
+            const res = await fetch('/api/portfolio/' + isin + '/reactivate', {method: 'POST'});
+            if (res.ok) {
+                document.getElementById('eeExitSection').style.display = 'none';
+                portfolioEventsCache = {}; detailCache = {}; historyCache = {}; loadPortfolio();
+            }
+        }
+
+        async function saveEventEdit(eventId) {
+            const date = document.getElementById('ev-date-' + eventId).value;
+            const price = parseFloat(document.getElementById('ev-price-' + eventId).value);
+            const tdate = document.getElementById('ev-tdate-' + eventId).value;
+            const tprice = parseFloat(document.getElementById('ev-tprice-' + eventId).value);
+            if (!date) { alert('Data partenza obbligatoria'); return; }
+            const res = await fetch('/api/portfolio/events/' + eventId, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    event_date: date,
+                    event_price: isNaN(price) ? null : price,
+                    target_date: tdate || null,
+                    target_price: isNaN(tprice) ? null : tprice
+                })
+            });
+            let d = {};
+            try { d = await res.json(); } catch(e) {}
+            if (!res.ok) { alert('Errore: ' + (d.error||'HTTP ' + res.status)); }
+            else { portfolioEventsCache = {}; detailCache = {}; }
+        }
+
+        async function deleteEvent(eventId, isin) {
+            if (!confirm('Eliminare questo evento?')) return;
+            const res = await fetch('/api/portfolio/events/' + eventId, {method: 'DELETE'});
+            if (res.ok) {
+                portfolioEventsCache = {};
+                detailCache = {};
+                loadEditEvents(isin);
+            }
+        }
+
+        function closeEditEventsModal() {
+            document.getElementById('editEventsModal').classList.remove('open');
+            _editIsin = null;
         }
 
         async function submitPortfolioEntry() {
@@ -1513,13 +1903,33 @@
                 document.getElementById('detailKpis').innerHTML = '<span style="color:#888;">' + data.error + '</span>';
                 return;
             }
-            if (data.portfolio_analysis && !data.portfolio_analysis.error) {
-                renderPortfolioPanels(data.portfolio_analysis, data.current);
+
+            // Carica eventi portafoglio (switch) per questo fondo, usando cache
+            let switchEvents = portfolioEventsCache[isin];
+            if (switchEvents === undefined && portfolioIsins.has(isin)) {
+                try {
+                    const evRes = await fetch('/api/portfolio/events/' + isin);
+                    const evData = await evRes.json();
+                    switchEvents = evData.events || [];
+                    portfolioEventsCache[isin] = switchEvents;
+                } catch(e) { switchEvents = []; }
+            }
+
+            // Arricchisci portfolio_analysis con exit info se disponibile
+            const pfEntry = (portfolioData || []).find(x => x.isin === isin);
+            let pa = data.portfolio_analysis;
+            if (pa && pfEntry) {
+                pa.exit_date = pfEntry.exit_date || null;
+                pa.exit_price = pfEntry.exit_price || null;
+            }
+
+            if (pa && !pa.error) {
+                renderPortfolioPanels(pa, data.current);
             }
             renderDetailKpis(data);
             renderPurityPanel(data.signal_purity, data.asset_type);
             renderDetailSentiment(data.sentiment);
-            renderDetailChart(data.history, data.portfolio_analysis);
+            renderDetailChart(data.history, pa, switchEvents || []);
             renderDetailTable(data.history);
             renderAnalysisNarrative(data);
         }
@@ -1610,7 +2020,7 @@
             }).join('');
         }
 
-        function renderDetailChart(history, pa) {
+        function renderDetailChart(history, pa, switchEvents) {
             if (detailChart) { detailChart.destroy(); detailChart = null; }
             const ctx = document.getElementById('detailChart').getContext('2d');
             const labels = history.map(r => r.date);
@@ -1618,35 +2028,172 @@
             const mm20s  = history.map(r => r.mm20);
             const mm50s  = history.map(r => r.mm50);
 
-            // Entrata corrente in L1 (da l1TrackingMap)
-            const isin       = currentDetailIsin;
-            const track      = l1TrackingMap[isin] || {};
-            const l1Entry    = track.entry_date ? track.entry_date.substring(0,10) : null;
-            const l1EntryPx  = track.entry_price || null;
-            const l1EntryIdx = l1Entry ? labels.findIndex(l => l >= l1Entry) : -1;
+            // Indice della data di acquisto portafoglio
+            const entryDate = pa?.entry_date || null;
+            const entryPrice = pa?.entry_price || null;
+            const exitDate = pa?.exit_date || null;
+            const exitPrice = pa?.exit_price || null;
+            const entryIdx = entryDate ? labels.findIndex(l => l >= entryDate) : -1;
+            const pfExitIdx = exitDate ? labels.findIndex(l => l >= exitDate) : -1;
 
-            // Entrata dal portafoglio personale (se aperto dal portafoglio)
-            const paEntry    = pa?.entry_date || null;
-            const paEntryPx  = pa?.entry_price || null;
-            const paEntryIdx = paEntry ? labels.findIndex(l => l >= paEntry) : -1;
+            // Switch events per questo fondo
+            const switches = (switchEvents || []).filter(e => e.event_type === 'switch');
 
-            // Uscite e relative entrate storiche dagli ultimi 30gg
-            const isinExits = l1ExitsData.filter(e => e.isin === isin);
-            const exitMarkers = isinExits
-                .filter(e => e.exit_date)
-                .map(e => ({ idx: labels.findIndex(l => l >= e.exit_date.substring(0,10)), price: e.exit_price || null }))
-                .filter(m => m.idx >= 0);
-            const pastEntryMarkers = isinExits
-                .filter(e => e.entry_date)
-                .map(e => ({ idx: labels.findIndex(l => l >= e.entry_date.substring(0,10)), price: e.entry_price || null }))
-                .filter(m => m.idx >= 0 && m.idx !== l1EntryIdx);
+            // Date L1 entrata / uscita — cercate sia in tracking attivo che in storico uscite
+            const _isin = currentDetailIsin;
+            const _l1Track = l1TrackingMap[_isin] || null;
+            const _l1Exit  = l1ExitsData.find(e => e.isin === _isin) || null;
+            const l1EntryDate = _l1Track?.entry_date || _l1Exit?.entry_date || null;
+            const l1ExitDate  = _l1Exit?.exit_date || null;
+            const l1EntryIdx  = l1EntryDate ? labels.findIndex(l => l >= l1EntryDate.substring(0,10)) : -1;
+            const l1ExitIdx   = l1ExitDate  ? labels.findIndex(l => l >= l1ExitDate.substring(0,10))  : -1;
+            const l1ExitGain  = _l1Exit?.pct_gain != null ? _l1Exit.pct_gain.toFixed(2) + '%' : null;
 
-            const chartPlugin = {
-                id: 'chartLines',
+            // Plugin: linea acquisto portafoglio (verde tratteggiata) + area holding + uscita rossa Port.
+            const entryLinePlugin = {
+                id: 'entryLine',
                 afterDraw(chart) {
-                    const { ctx: c, scales: { x, y }, chartArea } = chart;
+                    const { ctx: c, scales: { x, y } } = chart;
+                    c.save();
 
-                    // Etichette a destra di ogni linea
+                    // Area shaded blu — periodo detenzione portafoglio
+                    if (entryIdx >= 0) {
+                        const xEntry = x.getPixelForValue(entryIdx);
+                        const xEnd   = pfExitIdx >= 0
+                            ? x.getPixelForValue(pfExitIdx)
+                            : x.getPixelForValue(labels.length - 1);
+                        c.fillStyle = 'rgba(68,114,196,0.07)';
+                        c.fillRect(xEntry, y.top, xEnd - xEntry, y.bottom - y.top);
+                    }
+
+                    // Linea verde — entrata portafoglio
+                    if (entryIdx >= 0 && entryPrice) {
+                        const xPos = x.getPixelForValue(entryIdx);
+                        c.strokeStyle = '#00FF88';
+                        c.lineWidth = 1.5;
+                        c.setLineDash([5, 4]);
+                        c.globalAlpha = 0.8;
+                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+                        c.setLineDash([]); c.globalAlpha = 1;
+                        c.fillStyle = '#00FF88';
+                        c.font = 'bold 9px sans-serif';
+                        c.textAlign = 'center';
+                        c.fillText('▶ Port.', xPos, y.top + 10);
+                        c.font = '8px sans-serif';
+                        c.fillText(entryDate, xPos, y.top + 20);
+                        const yPos = y.getPixelForValue(entryPrice);
+                        if (yPos > y.top && yPos < y.bottom) {
+                            c.font = 'bold 9px sans-serif';
+                            c.textAlign = 'left';
+                            c.fillText('✦ ' + entryPrice.toFixed(4), xPos + 4, yPos - 3);
+                        }
+                    }
+
+                    // Linee bianche — switch portafoglio
+                    switches.forEach((sw, i) => {
+                        const swDate = sw.event_date ? sw.event_date.substring(0,10) : null;
+                        if (!swDate) return;
+                        const swIdx = labels.findIndex(l => l >= swDate);
+                        if (swIdx < 0) return;
+                        const xPos = x.getPixelForValue(swIdx);
+                        c.strokeStyle = '#ffffff';
+                        c.lineWidth = 1.5;
+                        c.setLineDash([4, 3]);
+                        c.globalAlpha = 0.65;
+                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+                        c.setLineDash([]); c.globalAlpha = 1;
+                        c.fillStyle = '#ffffff';
+                        c.font = 'bold 9px sans-serif';
+                        c.textAlign = 'center';
+                        c.fillText('⇄', xPos, y.top + 10 + (i % 2) * 10);
+                        c.font = '8px sans-serif';
+                        c.fillText(swDate, xPos, y.top + 20 + (i % 2) * 10);
+                        if (sw.target_fund_name) {
+                            c.fillStyle = 'rgba(255,255,255,0.5)';
+                            c.font = '7px sans-serif';
+                            const label = sw.target_fund_name.length > 12 ? sw.target_fund_name.substring(0,12) + '…' : sw.target_fund_name;
+                            c.fillText('→ ' + label, xPos, y.top + 32 + (i % 2) * 10);
+                        }
+                    });
+
+                    // Linea rossa — uscita portafoglio
+                    if (pfExitIdx >= 0 && exitPrice) {
+                        const xPos = x.getPixelForValue(pfExitIdx);
+                        c.strokeStyle = '#FF4466';
+                        c.lineWidth = 1.5;
+                        c.setLineDash([5, 3]);
+                        c.globalAlpha = 0.8;
+                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+                        c.setLineDash([]); c.globalAlpha = 1;
+                        c.fillStyle = '#FF4466';
+                        c.font = 'bold 9px sans-serif';
+                        c.textAlign = 'center';
+                        c.fillText('◀ Exit Port.', xPos, y.bottom - 22);
+                        c.font = '8px sans-serif';
+                        c.fillText(exitDate, xPos, y.bottom - 12);
+                        const yPos = y.getPixelForValue(exitPrice);
+                        if (yPos > y.top && yPos < y.bottom) {
+                            c.font = 'bold 9px sans-serif';
+                            c.textAlign = 'right';
+                            c.fillText(exitPrice.toFixed(4), xPos - 4, yPos - 3);
+                        }
+                    }
+
+                    c.restore();
+                }
+            };
+
+            // Plugin: linee verticali L1 entrata (verde) e uscita (rosso) + area shaded
+            const l1LinesPlugin = {
+                id: 'l1Lines',
+                afterDraw(chart) {
+                    const { ctx: c, scales: { x, y } } = chart;
+                    c.save();
+
+                    // Area shaded tra entrata e uscita L1
+                    if (l1EntryIdx >= 0) {
+                        const xEntry = x.getPixelForValue(l1EntryIdx);
+                        const xExit  = l1ExitIdx >= 0 ? x.getPixelForValue(l1ExitIdx) : x.getPixelForValue(labels.length - 1);
+                        c.fillStyle = 'rgba(0, 176, 80, 0.06)';
+                        c.fillRect(xEntry, y.top, xExit - xEntry, y.bottom - y.top);
+                    }
+
+                    // Linea verde — entrata L1
+                    if (l1EntryIdx >= 0) {
+                        const xPos = x.getPixelForValue(l1EntryIdx);
+                        c.strokeStyle = '#00B050';
+                        c.lineWidth = 1.5;
+                        c.setLineDash([]);
+                        c.globalAlpha = 0.9;
+                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+                        c.fillStyle = '#00B050';
+                        c.font = 'bold 9px sans-serif';
+                        c.textAlign = 'center';
+                        c.fillText('▶ L1', xPos, y.top + 10);
+                        c.font = '8px sans-serif';
+                        c.fillText(l1EntryDate.substring(0,10), xPos, y.top + 20);
+                    }
+
+                    // Linea rossa — uscita L1
+                    if (l1ExitIdx >= 0) {
+                        const xPos = x.getPixelForValue(l1ExitIdx);
+                        c.strokeStyle = '#DC3545';
+                        c.lineWidth = 1.5;
+                        c.setLineDash([]);
+                        c.globalAlpha = 0.9;
+                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+                        c.fillStyle = '#DC3545';
+                        c.font = 'bold 9px sans-serif';
+                        c.textAlign = 'center';
+                        c.fillText('◀ Exit', xPos, y.top + 10);
+                        if (l1ExitGain) {
+                            c.font = 'bold 8px sans-serif';
+                            c.fillStyle = parseFloat(l1ExitGain) >= 0 ? '#00B050' : '#DC3545';
+                            c.fillText(l1ExitGain, xPos, y.top + 20);
+                        }
+                    }
+
+                    // Etichette a destra di ogni linea (NAV, MM20, MM50)
                     chart.data.datasets.forEach((ds, i) => {
                         const meta = chart.getDatasetMeta(i);
                         if (meta.hidden) return;
@@ -1658,69 +2205,11 @@
                         c.save();
                         c.fillStyle = ds.borderColor; c.globalAlpha = 0.9;
                         c.font = 'bold 9px sans-serif'; c.textAlign = 'left';
-                        c.fillText(ds.label, chartArea.right + 4, lastPt.y + 4);
+                        c.fillText(ds.label, chart.chartArea.right + 4, lastPt.y + 4);
                         c.restore();
                     });
 
-                    // Linea verde — entrata L1 corrente
-                    if (l1EntryIdx >= 0 && l1EntryPx) {
-                        const xPos = x.getPixelForValue(l1EntryIdx);
-                        c.save();
-                        c.strokeStyle = '#00FF88'; c.lineWidth = 1.5; c.setLineDash([5,4]); c.globalAlpha = 0.75;
-                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
-                        c.setLineDash([]); c.globalAlpha = 1; c.fillStyle = '#00FF88';
-                        c.font = 'bold 10px sans-serif'; c.textAlign = 'left';
-                        const yPos = y.getPixelForValue(l1EntryPx);
-                        if (yPos > y.top && yPos < y.bottom)
-                            c.fillText('▲ ' + l1EntryPx.toFixed(4), xPos + 4, yPos - 3);
-                        c.restore();
-                    }
-
-                    // Linea verde — entrata portafoglio personale (se diversa)
-                    if (paEntryIdx >= 0 && paEntryPx && paEntryIdx !== l1EntryIdx) {
-                        const xPos = x.getPixelForValue(paEntryIdx);
-                        c.save();
-                        c.strokeStyle = '#00FF88'; c.lineWidth = 1.5; c.setLineDash([5,4]); c.globalAlpha = 0.75;
-                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
-                        c.setLineDash([]); c.globalAlpha = 1; c.fillStyle = '#00FF88';
-                        c.font = 'bold 10px sans-serif'; c.textAlign = 'left';
-                        const yPos = y.getPixelForValue(paEntryPx);
-                        if (yPos > y.top && yPos < y.bottom)
-                            c.fillText('✦ ' + paEntryPx.toFixed(4), xPos + 4, yPos - 3);
-                        c.restore();
-                    }
-
-                    // Linee verdi — entrate di cicli L1 passati (dagli exit records)
-                    pastEntryMarkers.forEach(m => {
-                        const xPos = x.getPixelForValue(m.idx);
-                        c.save();
-                        c.strokeStyle = '#00FF88'; c.lineWidth = 1; c.setLineDash([4,4]); c.globalAlpha = 0.45;
-                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
-                        if (m.price) {
-                            c.setLineDash([]); c.globalAlpha = 0.7; c.fillStyle = '#00FF88';
-                            c.font = '9px sans-serif'; c.textAlign = 'left';
-                            const yPos = y.getPixelForValue(m.price);
-                            if (yPos > y.top && yPos < y.bottom)
-                                c.fillText('▲ ' + m.price.toFixed(4), xPos + 3, yPos - 3);
-                        }
-                        c.restore();
-                    });
-
-                    // Linee rosse — uscite da L1 (ultimi 30gg)
-                    exitMarkers.forEach(m => {
-                        const xPos = x.getPixelForValue(m.idx);
-                        c.save();
-                        c.strokeStyle = '#DC3545'; c.lineWidth = 1.5; c.setLineDash([5,4]); c.globalAlpha = 0.75;
-                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
-                        if (m.price) {
-                            c.setLineDash([]); c.globalAlpha = 1; c.fillStyle = '#DC3545';
-                            c.font = 'bold 10px sans-serif'; c.textAlign = 'left';
-                            const yPos = y.getPixelForValue(m.price);
-                            if (yPos > y.top && yPos < y.bottom)
-                                c.fillText('▼ ' + m.price.toFixed(4), xPos + 4, yPos + 12);
-                        }
-                        c.restore();
-                    });
+                    c.restore();
                 }
             };
 
@@ -1747,7 +2236,7 @@
                         y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
                     }
                 },
-                plugins: [chartPlugin]
+                plugins: [l1LinesPlugin, entryLinePlugin]
             });
         }
 
