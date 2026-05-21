@@ -75,7 +75,7 @@ class TechnicalAnalyzer:
             'bb_condition': 'upper_half',
         },
         'sector_thematic': {
-            # Fondi settoriali/tematici: range RSI leggermente più ampio
+            # Fondi settoriali/tematici: range RSI e distanza più ampi per catturare strappi violenti
             'ma_period': 20,
             'ma_period_slow': 50,
             'adx_period': 14,
@@ -87,8 +87,8 @@ class TechnicalAnalyzer:
             'bollinger_std': 2.0,
             'days_above_ma': 5,
             'rsi_optimal_low': 54,
-            'rsi_optimal_high': 66,
-            'max_distance_from_ma': 2.5,
+            'rsi_optimal_high': 70,
+            'max_distance_from_ma': 3.5,
             'ma_signal_threshold': 2.0,
             'bb_condition': 'upper_half',
         },
@@ -213,6 +213,13 @@ class TechnicalAnalyzer:
         if any(kw in cat for kw in ('monetar', 'money market', 'liquidity')):
             return 'money_market'
 
+        # ── Settoriali/tematici — check anticipato per evitare falsi match su 'alternativ' ──
+        # Es. "Energie Alternative" contiene 'alternativ' ma è un fondo settoriale, non high_yield
+        if any(kw in cat for kw in ('settorial', 'thematic', 'tecnolog', 'healthcare',
+                                     'salute', 'energia', 'infrastruttur', 'real estate',
+                                     'immobil', 'biotech', 'pharma', 'fintech')):
+            return 'sector_thematic'
+
         # ── Multi-asset/bilanciati/alternativi → high_yield ─────────────────
         # Questo check è prima di is_bond: "bilanciati" non contiene parole chiave bond
         if any(kw in cat for kw in ('alternativ', 'long-short', 'long short', 'absolute return',
@@ -226,7 +233,7 @@ class TechnicalAnalyzer:
             if any(kw in cat for kw in ('emerging', 'mercati emergenti', 'em ', 'cina', 'india',
                                          'brasile', 'asia pacific', 'paesi emergenti')):
                 return 'emerging_markets'
-            if any(kw in cat for kw in ('settoriale', 'thematic', 'tecnolog', 'healthcare',
+            if any(kw in cat for kw in ('settorial', 'thematic', 'tecnolog', 'healthcare',
                                          'salute', 'finanz', 'energia', 'infrastruttur',
                                          'real estate', 'immobil', 'biotech', 'pharma')):
                 return 'sector_thematic'
@@ -767,8 +774,16 @@ class TechnicalAnalyzer:
         # 3. MOMENTUM: RSI 55–65
         rsi_optimal = self.rsi_optimal_low <= rsi_current <= self.rsi_optimal_high
 
-        # 4. DISTANZA: NAV sopra MM20 di max 2.5%
-        distance_ok = 0 <= distance_from_ma < self.max_distance_from_ma
+        # 4. DISTANZA: NAV sopra MM20 di max X% (con override per breakout violento nei settoriali)
+        # Breakout override: se settoriale fa +3.5% in un giorno, soglia sale temporaneamente a 5%
+        pct_1g = ((float(current_price) - float(prices.iloc[-2])) / float(prices.iloc[-2]) * 100
+                  ) if len(prices) >= 2 and float(prices.iloc[-2]) != 0 else 0.0
+        breakout_day = (self.asset_type == 'sector_thematic'
+                        and pct_1g >= 3.5
+                        and rsi_current < 75
+                        and mm20_above_mm50)
+        effective_max_dist = 5.0 if breakout_day else self.max_distance_from_ma
+        distance_ok = 0 <= distance_from_ma < effective_max_dist
 
         # 5. ADX: > 25 (trend con direzione)
         adx_ok = adx_current > self.adx_threshold
