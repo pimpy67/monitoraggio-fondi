@@ -486,6 +486,16 @@ def get_portfolio():
         if current_nav and entry['entry_price'] and float(entry['entry_price']) > 0:
             perf_pct = round((current_nav - float(entry['entry_price'])) / float(entry['entry_price']) * 100, 2)
 
+        exit_nav = entry.get('exit_price')
+        exit_date = entry.get('exit_date')
+        status = entry.get('status', 'active')
+
+        # P&L su prezzo di uscita se già uscito, altrimenti su NAV attuale
+        ref_price = exit_nav if (status == 'exited' and exit_nav) else current_nav
+        perf_pct = None
+        if ref_price and entry['entry_price'] and float(entry['entry_price']) > 0:
+            perf_pct = round((float(ref_price) - float(entry['entry_price'])) / float(entry['entry_price']) * 100, 2)
+
         result.append({
             'isin': isin,
             'fund_name': entry['fund_name'],
@@ -493,6 +503,9 @@ def get_portfolio():
             'entry_price': entry['entry_price'],
             'current_nav': current_nav,
             'perf_pct': perf_pct,
+            'exit_date': exit_date,
+            'exit_price': exit_nav,
+            'status': status,
             'level': analysis.get('livello') or analysis.get('level'),
             'signal': analysis.get('segnale') or analysis.get('signal'),
             'rsi': analysis.get('rsi14') or analysis.get('rsi'),
@@ -534,13 +547,125 @@ def add_to_portfolio():
 
 @app.route('/api/portfolio/<isin>', methods=['DELETE'])
 def remove_from_portfolio(isin):
-    """Rimuove un fondo dal portafoglio personale."""
+    """Rimuove definitivamente un fondo dal portafoglio."""
     isin = isin.strip().upper()
     ok = db.remove_portfolio_entry(isin)
     if ok:
         return jsonify({'status': 'ok', 'isin': isin, 'message': 'Fondo rimosso dal portafoglio'})
     else:
         return jsonify({'error': 'Errore rimozione - database non disponibile'}), 503
+
+
+@app.route('/api/portfolio/<isin>', methods=['PUT'])
+def update_portfolio_entry(isin):
+    """Modifica data/prezzo di entrata di un fondo."""
+    isin = isin.strip().upper()
+    data = request.get_json() or {}
+    entry_date = data.get('entry_date', '')
+    entry_price = data.get('entry_price')
+    fund_name = data.get('fund_name')
+    if not entry_date or entry_price is None:
+        return jsonify({'error': 'entry_date e entry_price obbligatori'}), 400
+    try:
+        entry_price = float(entry_price)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'entry_price deve essere un numero'}), 400
+    ok = db.update_portfolio_entry(isin, entry_date, entry_price, fund_name)
+    if ok:
+        return jsonify({'status': 'ok', 'isin': isin})
+    return jsonify({'error': 'Errore aggiornamento'}), 503
+
+
+@app.route('/api/portfolio/<isin>/exit', methods=['POST'])
+def exit_portfolio(isin):
+    """Registra l'uscita (vendita) da un fondo del portafoglio."""
+    isin = isin.strip().upper()
+    data = request.get_json() or {}
+    exit_date = data.get('exit_date', '')
+    exit_price = data.get('exit_price')
+    if not exit_date or exit_price is None:
+        return jsonify({'error': 'exit_date e exit_price obbligatori'}), 400
+    try:
+        exit_price = float(exit_price)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'exit_price deve essere un numero'}), 400
+    ok = db.exit_portfolio_entry(isin, exit_date, exit_price)
+    if ok:
+        db.add_portfolio_event(isin, 'exit', exit_date, exit_price)
+        return jsonify({'status': 'ok', 'isin': isin})
+    return jsonify({'error': 'Errore salvataggio'}), 503
+
+
+@app.route('/api/portfolio/<isin>/reactivate', methods=['POST'])
+def reactivate_portfolio(isin):
+    """Riporta un fondo a status active (annulla uscita)."""
+    isin = isin.strip().upper()
+    ok = db.reactivate_portfolio_entry(isin)
+    if ok:
+        return jsonify({'status': 'ok', 'isin': isin})
+    return jsonify({'error': 'Errore'}), 503
+
+
+@app.route('/api/portfolio/<isin>/switch', methods=['POST'])
+def add_switch_event(isin):
+    """Registra uno switch (uscita parziale) su un fondo del portafoglio."""
+    isin = isin.strip().upper()
+    data = request.get_json() or {}
+    event_date = data.get('event_date', '')
+    event_price = data.get('event_price')
+    target_isin = data.get('target_isin', '').strip().upper() or None
+    target_fund_name = data.get('target_fund_name', '').strip() or None
+    notes = data.get('notes', '').strip() or None
+    if not event_date or event_price is None:
+        return jsonify({'error': 'event_date e event_price obbligatori'}), 400
+    try:
+        event_price = float(event_price)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'event_price deve essere un numero'}), 400
+    eid = db.add_portfolio_event(isin, 'switch', event_date, event_price,
+                                 target_isin, target_fund_name, notes)
+    if eid >= 0:
+        return jsonify({'status': 'ok', 'id': eid, 'isin': isin})
+    return jsonify({'error': 'Errore salvataggio'}), 503
+
+
+@app.route('/api/portfolio/events/<isin>', methods=['GET'])
+def get_portfolio_events(isin):
+    """Restituisce tutti gli eventi (switch, exit) registrati per un fondo."""
+    isin = isin.strip().upper()
+    events = db.get_portfolio_events(isin)
+    return jsonify({'isin': isin, 'events': events})
+
+
+@app.route('/api/portfolio/events/<int:event_id>', methods=['PUT'])
+def update_portfolio_event(event_id):
+    """Modifica un evento portafoglio (data, prezzo, destinazione)."""
+    data = request.get_json() or {}
+    event_date = data.get('event_date', '')
+    event_price = data.get('event_price')
+    target_isin = data.get('target_isin', '').strip().upper() or None
+    target_fund_name = data.get('target_fund_name', '').strip() or None
+    notes = data.get('notes', '').strip() or None
+    if not event_date:
+        return jsonify({'error': 'event_date obbligatorio'}), 400
+    try:
+        event_price = float(event_price) if event_price is not None else None
+    except (ValueError, TypeError):
+        return jsonify({'error': 'event_price deve essere un numero'}), 400
+    ok = db.update_portfolio_event(event_id, event_date, event_price,
+                                   target_isin, target_fund_name, notes)
+    if ok:
+        return jsonify({'status': 'ok', 'id': event_id})
+    return jsonify({'error': 'Errore aggiornamento'}), 503
+
+
+@app.route('/api/portfolio/events/<int:event_id>', methods=['DELETE'])
+def delete_portfolio_event(event_id):
+    """Elimina un evento portafoglio."""
+    ok = db.delete_portfolio_event(event_id)
+    if ok:
+        return jsonify({'status': 'ok', 'id': event_id})
+    return jsonify({'error': 'Errore eliminazione'}), 503
 
 
 @app.route('/api/l1-tracking')

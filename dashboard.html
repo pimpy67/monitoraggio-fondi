@@ -250,6 +250,21 @@
         .btn-remove:hover { background: rgba(220,53,69,0.12); }
         .btn-toggle-hist { background: none; border: 1px solid rgba(255,255,255,0.13); color: #777; border-radius: 4px; cursor: pointer; font-size: 0.75em; padding: 2px 7px; transition: all 0.15s; }
         .btn-toggle-hist:hover { color: #fff; border-color: rgba(255,255,255,0.28); }
+        .btn-switch { background: none; border: 1px solid rgba(255,255,255,0.3); color: #ccc; border-radius: 4px; cursor: pointer; font-size: 0.73em; padding: 2px 6px; transition: all 0.15s; white-space: nowrap; }
+        .btn-switch:hover { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.5); }
+        .btn-exit { background: none; border: 1px solid rgba(220,53,69,0.4); color: #DC3545; border-radius: 4px; cursor: pointer; font-size: 0.73em; padding: 2px 6px; transition: all 0.15s; white-space: nowrap; }
+        .btn-exit:hover { background: rgba(220,53,69,0.12); border-color: #DC3545; }
+        .btn-edit-ev { background: none; border: 1px solid rgba(255,193,0,0.35); color: #FFC000; border-radius: 4px; cursor: pointer; font-size: 0.73em; padding: 2px 6px; transition: all 0.15s; white-space: nowrap; }
+        .btn-edit-ev:hover { background: rgba(255,193,0,0.1); border-color: #FFC000; }
+        .pf-row-exited > td { opacity: 0.55; }
+        .pf-row-exited > td:first-child { opacity: 0.55; }
+        .badge-exited { display:inline-block; font-size:0.65em; background:rgba(220,53,69,0.2); color:#DC3545; border-radius:4px; padding:1px 5px; margin-left:4px; vertical-align:middle; font-weight:bold; letter-spacing:0.3px; }
+        .badge-switch { display:inline-block; font-size:0.65em; background:rgba(255,255,255,0.12); color:#aaa; border-radius:4px; padding:1px 5px; margin-left:2px; vertical-align:middle; }
+        /* modal events table */
+        .ev-table { width:100%; border-collapse:collapse; font-size:0.82em; margin-top:10px; }
+        .ev-table th { padding:5px 8px; color:#666; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.08); text-align:left; font-size:0.8em; }
+        .ev-table td { padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.04); color:#bbb; vertical-align:middle; }
+        .modal-box-wide { background: #16213e; border: 1px solid rgba(255,255,255,0.15); border-radius: 14px; padding: 24px 26px; width: 560px; max-width: 96vw; box-shadow: 0 16px 48px rgba(0,0,0,0.6); max-height: 90vh; overflow-y: auto; }
         /* ── Fund Detail Modal ── */
         .detail-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.78); z-index: 1100; backdrop-filter: blur(5px); align-items: flex-start; justify-content: center; overflow-y: auto; padding: 20px 10px; }
         .detail-overlay.open { display: flex; }
@@ -399,6 +414,108 @@
             <div class="modal-actions">
                 <button class="btn-cancel" onclick="closePortfolioModal()">Annulla</button>
                 <button class="btn-primary" onclick="submitPortfolioEntry()">Aggiungi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Switch -->
+    <div class="modal-overlay" id="switchModal" onclick="if(event.target===this)closeSwitchModal()">
+        <div class="modal-box">
+            <h3>&#8644; Switch Parziale</h3>
+            <div id="switchFundLabel" style="font-size:0.8em;color:#aaa;margin-bottom:14px;"></div>
+            <input type="hidden" id="swIsin">
+            <div class="modal-field">
+                <label>Data Switch</label>
+                <input type="date" id="swDate">
+            </div>
+            <div class="modal-field">
+                <label>NAV al momento dello Switch</label>
+                <input type="number" id="swPrice" step="0.0001" min="0" placeholder="es. 12.3456">
+            </div>
+            <div class="modal-field">
+                <label>Fondo Destinazione (nome)</label>
+                <input type="text" id="swTargetName" placeholder="es. Amundi Euro Liquidity">
+            </div>
+            <div class="modal-field">
+                <label>ISIN Destinazione (opzionale)</label>
+                <input type="text" id="swTargetIsin" placeholder="es. LU1234567890" style="font-family:monospace;font-size:0.82em;">
+            </div>
+            <div class="modal-field">
+                <label>Note (opzionale)</label>
+                <input type="text" id="swNotes" placeholder="es. Switch 80% verso MM">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeSwitchModal()">Annulla</button>
+                <button class="btn-primary" style="background:#555;border:1px solid rgba(255,255,255,0.3);" onclick="submitSwitch()">Registra Switch</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Vendi / Uscita -->
+    <div class="modal-overlay" id="exitModal" onclick="if(event.target===this)closeExitModal()">
+        <div class="modal-box">
+            <h3>&#128683; Registra Uscita</h3>
+            <div id="exitFundLabel" style="font-size:0.8em;color:#aaa;margin-bottom:14px;"></div>
+            <input type="hidden" id="exIsin">
+            <div class="modal-field">
+                <label>Data Vendita</label>
+                <input type="date" id="exDate">
+            </div>
+            <div class="modal-field">
+                <label>NAV Vendita</label>
+                <input type="number" id="exPrice" step="0.0001" min="0" placeholder="es. 13.2000">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeExitModal()">Annulla</button>
+                <button class="btn-primary" style="background:#DC3545;" onclick="submitExit()">Conferma Uscita</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Modifica Eventi -->
+    <div class="modal-overlay" id="editEventsModal" onclick="if(event.target===this)closeEditEventsModal()">
+        <div class="modal-box-wide">
+            <h3 style="color:#FFC000;">&#9998; Modifica Posizione</h3>
+            <div id="editEvFundLabel" style="font-size:0.8em;color:#aaa;margin-bottom:12px;"></div>
+            <input type="hidden" id="eeIsin">
+
+            <!-- Entrata -->
+            <div style="font-size:0.75em;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Entrata</div>
+            <div style="display:flex;gap:10px;margin-bottom:16px;align-items:flex-end;">
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>Data Acquisto</label>
+                    <input type="date" id="eeEntryDate">
+                </div>
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>NAV Acquisto</label>
+                    <input type="number" id="eeEntryPrice" step="0.0001" min="0">
+                </div>
+                <button class="btn-edit-ev" onclick="saveEntryEdit()" style="padding:6px 10px;font-size:0.8em;">Salva</button>
+            </div>
+
+            <!-- Uscita (se presente) -->
+            <div id="eeExitSection" style="display:none;">
+                <div style="font-size:0.75em;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Uscita Registrata</div>
+                <div style="display:flex;gap:10px;margin-bottom:16px;align-items:flex-end;">
+                    <div class="modal-field" style="flex:1;margin-bottom:0;">
+                        <label>Data Uscita</label>
+                        <input type="date" id="eeExitDate">
+                    </div>
+                    <div class="modal-field" style="flex:1;margin-bottom:0;">
+                        <label>NAV Uscita</label>
+                        <input type="number" id="eeExitPrice" step="0.0001" min="0">
+                    </div>
+                    <button class="btn-edit-ev" onclick="saveExitEdit()" style="padding:6px 10px;font-size:0.8em;">Salva</button>
+                    <button class="btn-remove" onclick="reactivateFund()" style="padding:6px 8px;font-size:0.8em;" title="Riapri posizione">&#8635;</button>
+                </div>
+            </div>
+
+            <!-- Switch Events -->
+            <div style="font-size:0.75em;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin:4px 0 8px;">Switch Registrati</div>
+            <div id="eeEventsList" style="min-height:30px;"></div>
+
+            <div class="modal-actions" style="margin-top:14px;">
+                <button class="btn-cancel" onclick="closeEditEventsModal()">Chiudi</button>
             </div>
         </div>
     </div>
@@ -1282,8 +1399,10 @@
                 const res = await fetch('/api/portfolio');
                 const data = await res.json();
                 const pf = data.portfolio || [];
-                portfolioIsins = new Set(pf.map(p => p.isin));
-                document.getElementById('portfolioCount').textContent = pf.length + ' fond' + (pf.length === 1 ? 'o' : 'i');
+                portfolioData = pf;
+                portfolioIsins = new Set(pf.filter(p => p.status !== 'exited').map(p => p.isin));
+                const activeCount = pf.filter(p => p.status !== 'exited').length;
+                document.getElementById('portfolioCount').textContent = activeCount + ' fond' + (activeCount === 1 ? 'o' : 'i') + (pf.length > activeCount ? ' (+' + (pf.length - activeCount) + ' usciti)' : '');
                 renderPortfolio(pf);
             } catch(e) {
                 console.error('Portfolio load error', e);
@@ -1298,16 +1417,16 @@
             }
             content.innerHTML = `<table class="portfolio-table">
                 <thead><tr>
-                    <th style="width:30%">Fondo</th>
-                    <th style="width:10%">Acquisto</th>
-                    <th style="width:9%">NAV Acq.</th>
-                    <th style="width:9%">NAV Att.</th>
-                    <th style="width:9%">Perf %</th>
+                    <th style="width:26%">Fondo</th>
+                    <th style="width:9%">Acquisto</th>
+                    <th style="width:8%">NAV Acq.</th>
+                    <th style="width:8%">NAV Att.</th>
+                    <th style="width:8%">Perf %</th>
                     <th style="width:5%;text-align:center">Liv.</th>
-                    <th style="width:6%;text-align:center">RSI</th>
-                    <th style="width:8%;text-align:center">Dist MM20</th>
-                    <th style="width:7%;text-align:center">Storico</th>
-                    <th style="width:7%;text-align:center">Rimuovi</th>
+                    <th style="width:5%;text-align:center">RSI</th>
+                    <th style="width:7%;text-align:center">Dist MM20</th>
+                    <th style="width:6%;text-align:center">Storico</th>
+                    <th style="width:18%;text-align:center">Azioni</th>
                 </tr></thead>
                 <tbody id="portfolioTableBody"></tbody>
             </table>`;
@@ -1320,22 +1439,32 @@
                 const rsiCls = p.rsi < 30 ? 'low' : p.rsi > 70 ? 'high' : 'mid';
                 const distStr = p.dist_mm20 != null ? (p.dist_mm20 > 0 ? '+' : '') + parseFloat(p.dist_mm20).toFixed(1) + '%' : '-';
                 const distCls = p.dist_mm20 > 0 ? 'pos' : p.dist_mm20 < 0 ? 'neg' : 'zero';
-                const navAtt = p.current_nav != null ? parseFloat(p.current_nav).toFixed(4) : '-';
+                const isExited = p.status === 'exited';
+                const navAtt = isExited
+                    ? (p.exit_price != null ? parseFloat(p.exit_price).toFixed(4) : '-')
+                    : (p.current_nav != null ? parseFloat(p.current_nav).toFixed(4) : '-');
                 const navAcq = p.entry_price != null ? parseFloat(p.entry_price).toFixed(4) : '-';
                 const lv = p.level;
                 const levBadge = lv ? `<span style="font-weight:bold;color:${lv===1?'#00B050':lv===2?'#FFC000':'#5A8FD4'}">L${lv}</span>` : '-';
                 const isin = p.isin;
-                return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openFundDetail('${isin}',{entry_price:${p.entry_price},entry_date:'${p.entry_date}'})">
-                    <td class="fund-name" title="${isin}">${p.fund_name || isin}<span class="fund-isin">${isin}</span></td>
+                const exitedBadge = isExited ? `<span class="badge-exited">USCITO ${p.exit_date||''}</span>` : '';
+                const actionBtns = isExited
+                    ? `<button class="btn-edit-ev" onclick="event.stopPropagation();openEditEventsModal('${isin}')" title="Modifica">&#9998;</button>
+                       <button class="btn-remove" onclick="event.stopPropagation();removeFromPortfolio('${isin}')" title="Rimuovi definitivamente" style="margin-left:4px;">&#10005;</button>`
+                    : `<button class="btn-switch" onclick="event.stopPropagation();openSwitchModal('${isin}')" title="Registra Switch">&#8644; Switch</button>
+                       <button class="btn-exit" onclick="event.stopPropagation();openExitModal('${isin}')" title="Registra Uscita" style="margin-left:4px;">&#128683; Vendi</button>
+                       <button class="btn-edit-ev" onclick="event.stopPropagation();openEditEventsModal('${isin}')" title="Modifica" style="margin-left:4px;">&#9998;</button>`;
+                return `<tr id="pf-row-${isin}" class="${isExited?'pf-row-exited':''}" style="cursor:pointer;" onclick="openFundDetail('${isin}',{entry_price:${p.entry_price},entry_date:'${p.entry_date}'})">
+                    <td class="fund-name" title="${isin}">${p.fund_name || isin}${exitedBadge}<span class="fund-isin">${isin}</span></td>
                     <td style="color:#888;font-size:0.83em;">${p.entry_date || '-'}</td>
                     <td style="font-family:monospace;font-size:0.85em;">${navAcq}</td>
-                    <td style="font-family:monospace;font-size:0.85em;">${navAtt}</td>
+                    <td style="font-family:monospace;font-size:0.85em;${isExited?'color:#DC3545;':''}">${navAtt}${isExited?'<span style="font-size:0.7em;color:#888;margin-left:2px;">exit</span>':''}</td>
                     <td><span class="perf-badge ${perfCls}">${perfStr}</span></td>
-                    <td style="text-align:center;">${levBadge}</td>
-                    <td class="rsi ${rsiCls}" style="text-align:center;">${rsiVal}</td>
-                    <td class="pct ${distCls}" style="text-align:center;font-size:0.88em;">${distStr}</td>
+                    <td style="text-align:center;">${isExited ? '<span style="color:#555;">—</span>' : levBadge}</td>
+                    <td class="rsi ${rsiCls}" style="text-align:center;">${isExited ? '—' : rsiVal}</td>
+                    <td class="pct ${distCls}" style="text-align:center;font-size:0.88em;">${isExited ? '—' : distStr}</td>
                     <td style="text-align:center;"><button class="btn-toggle-hist" onclick="event.stopPropagation();toggleFundHistory('${isin}')" id="btn-hist-${isin}">&#9660; 30gg</button></td>
-                    <td style="text-align:center;"><button class="btn-remove" onclick="event.stopPropagation();removeFromPortfolio('${isin}')" title="Rimuovi dal portafoglio">&#10005;</button></td>
+                    <td style="text-align:center;">${actionBtns}</td>
                 </tr>
                 <tr class="history-row" id="pf-hist-${isin}" style="display:none;">
                     <td colspan="10"><div id="hist-wrap-${isin}" style="padding:12px;color:#555;text-align:center;font-size:0.8em;">Caricamento...</div></td>
@@ -1415,6 +1544,216 @@
 
         function closePortfolioModal() {
             document.getElementById('portfolioModal').classList.remove('open');
+        }
+
+        // ── Switch Modal ────────────────────────────────────────────────────
+        let _switchIsin = null;
+        function openSwitchModal(isin) {
+            _switchIsin = isin;
+            const p = (portfolioData || []).find(x => x.isin === isin) || {};
+            document.getElementById('swIsin').value = isin;
+            document.getElementById('switchFundLabel').textContent = p.fund_name || isin;
+            document.getElementById('swDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('swPrice').value = p.current_nav ? parseFloat(p.current_nav).toFixed(4) : '';
+            document.getElementById('swTargetName').value = '';
+            document.getElementById('swTargetIsin').value = '';
+            document.getElementById('swNotes').value = '';
+            document.getElementById('switchModal').classList.add('open');
+            setTimeout(() => document.getElementById('swPrice').focus(), 100);
+        }
+        function closeSwitchModal() {
+            document.getElementById('switchModal').classList.remove('open');
+            _switchIsin = null;
+        }
+        async function submitSwitch() {
+            const isin = document.getElementById('swIsin').value;
+            const date = document.getElementById('swDate').value;
+            const price = parseFloat(document.getElementById('swPrice').value);
+            const targetName = document.getElementById('swTargetName').value.trim();
+            const targetIsin = document.getElementById('swTargetIsin').value.trim();
+            const notes = document.getElementById('swNotes').value.trim();
+            if (!date || isNaN(price) || price <= 0) { alert('Compila data e NAV'); return; }
+            try {
+                const res = await fetch('/api/portfolio/' + isin + '/switch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({event_date: date, event_price: price,
+                                         target_fund_name: targetName || null,
+                                         target_isin: targetIsin || null,
+                                         notes: notes || null})
+                });
+                if (res.ok) {
+                    closeSwitchModal();
+                    portfolioEventsCache = {};
+                    detailCache = {};
+                    loadPortfolio();
+                } else {
+                    const d = await res.json();
+                    alert('Errore: ' + (d.error || 'sconosciuto'));
+                }
+            } catch(e) { alert('Errore rete: ' + e.message); }
+        }
+
+        // ── Exit (Vendi) Modal ──────────────────────────────────────────────
+        let _exitIsin = null;
+        function openExitModal(isin) {
+            _exitIsin = isin;
+            const p = (portfolioData || []).find(x => x.isin === isin) || {};
+            document.getElementById('exIsin').value = isin;
+            document.getElementById('exitFundLabel').textContent = p.fund_name || isin;
+            document.getElementById('exDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('exPrice').value = p.current_nav ? parseFloat(p.current_nav).toFixed(4) : '';
+            document.getElementById('exitModal').classList.add('open');
+            setTimeout(() => document.getElementById('exPrice').focus(), 100);
+        }
+        function closeExitModal() {
+            document.getElementById('exitModal').classList.remove('open');
+            _exitIsin = null;
+        }
+        async function submitExit() {
+            const isin = document.getElementById('exIsin').value;
+            const date = document.getElementById('exDate').value;
+            const price = parseFloat(document.getElementById('exPrice').value);
+            if (!date || isNaN(price) || price <= 0) { alert('Compila data e NAV'); return; }
+            if (!confirm('Confermi l\'uscita da ' + isin + ' al NAV ' + price.toFixed(4) + '?')) return;
+            try {
+                const res = await fetch('/api/portfolio/' + isin + '/exit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({exit_date: date, exit_price: price})
+                });
+                if (res.ok) {
+                    closeExitModal();
+                    portfolioEventsCache = {};
+                    detailCache = {};
+                    historyCache = {};
+                    loadPortfolio();
+                } else {
+                    const d = await res.json();
+                    alert('Errore: ' + (d.error || 'sconosciuto'));
+                }
+            } catch(e) { alert('Errore rete: ' + e.message); }
+        }
+
+        // ── Edit Events Modal ───────────────────────────────────────────────
+        let _editIsin = null;
+        let portfolioEventsCache = {};
+        let portfolioData = [];
+
+        function openEditEventsModal(isin) {
+            _editIsin = isin;
+            const p = (portfolioData || []).find(x => x.isin === isin) || {};
+            document.getElementById('eeIsin').value = isin;
+            document.getElementById('editEvFundLabel').textContent = p.fund_name || isin;
+            document.getElementById('eeEntryDate').value = p.entry_date || '';
+            document.getElementById('eeEntryPrice').value = p.entry_price ? parseFloat(p.entry_price).toFixed(4) : '';
+            // Sezione uscita
+            if (p.status === 'exited' && p.exit_date) {
+                document.getElementById('eeExitSection').style.display = 'block';
+                document.getElementById('eeExitDate').value = p.exit_date;
+                document.getElementById('eeExitPrice').value = p.exit_price ? parseFloat(p.exit_price).toFixed(4) : '';
+            } else {
+                document.getElementById('eeExitSection').style.display = 'none';
+            }
+            document.getElementById('editEventsModal').classList.add('open');
+            loadEditEvents(isin);
+        }
+
+        async function loadEditEvents(isin) {
+            const list = document.getElementById('eeEventsList');
+            list.innerHTML = '<div style="color:#555;font-size:0.8em;">Caricamento...</div>';
+            try {
+                const res = await fetch('/api/portfolio/events/' + isin);
+                const data = await res.json();
+                const evs = (data.events || []).filter(e => e.event_type === 'switch');
+                portfolioEventsCache[isin] = data.events || [];
+                if (evs.length === 0) {
+                    list.innerHTML = '<div style="color:#444;font-size:0.8em;padding:6px 0;">Nessuno switch registrato.</div>';
+                    return;
+                }
+                list.innerHTML = `<table class="ev-table">
+                    <thead><tr><th>Data</th><th>NAV</th><th>Destinazione</th><th>Note</th><th></th></tr></thead>
+                    <tbody>${evs.map(ev => `
+                        <tr id="ev-row-${ev.id}">
+                            <td><input type="date" value="${ev.event_date}" id="ev-date-${ev.id}" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;padding:2px 5px;font-size:0.9em;width:110px;"></td>
+                            <td><input type="number" value="${ev.event_price||''}" id="ev-price-${ev.id}" step="0.0001" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;padding:2px 5px;font-size:0.9em;width:90px;"></td>
+                            <td style="color:#aaa;font-size:0.9em;">${ev.target_fund_name||ev.target_isin||'—'}</td>
+                            <td style="color:#666;font-size:0.85em;">${ev.notes||'—'}</td>
+                            <td style="white-space:nowrap;">
+                                <button class="btn-edit-ev" onclick="saveEventEdit(${ev.id})" style="padding:2px 6px;">&#10003;</button>
+                                <button class="btn-remove" onclick="deleteEvent(${ev.id},'${isin}')" style="padding:2px 6px;margin-left:3px;">&#10005;</button>
+                            </td>
+                        </tr>`).join('')}
+                    </tbody></table>`;
+            } catch(e) {
+                list.innerHTML = '<div style="color:#DC3545;font-size:0.8em;">Errore caricamento eventi</div>';
+            }
+        }
+
+        async function saveEntryEdit() {
+            const isin = document.getElementById('eeIsin').value;
+            const date = document.getElementById('eeEntryDate').value;
+            const price = parseFloat(document.getElementById('eeEntryPrice').value);
+            if (!date || isNaN(price) || price <= 0) { alert('Dati non validi'); return; }
+            const res = await fetch('/api/portfolio/' + isin, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({entry_date: date, entry_price: price})
+            });
+            if (res.ok) { portfolioEventsCache = {}; detailCache = {}; loadPortfolio(); }
+            else { const d = await res.json(); alert('Errore: ' + (d.error||'?')); }
+        }
+
+        async function saveExitEdit() {
+            const isin = document.getElementById('eeIsin').value;
+            const date = document.getElementById('eeExitDate').value;
+            const price = parseFloat(document.getElementById('eeExitPrice').value);
+            if (!date || isNaN(price) || price <= 0) { alert('Dati non validi'); return; }
+            const res = await fetch('/api/portfolio/' + isin + '/exit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({exit_date: date, exit_price: price})
+            });
+            if (res.ok) { portfolioEventsCache = {}; detailCache = {}; historyCache = {}; loadPortfolio(); }
+            else { const d = await res.json(); alert('Errore: ' + (d.error||'?')); }
+        }
+
+        async function reactivateFund() {
+            const isin = document.getElementById('eeIsin').value;
+            if (!confirm('Riapri la posizione su ' + isin + '? (annulla l\'uscita registrata)')) return;
+            const res = await fetch('/api/portfolio/' + isin + '/reactivate', {method: 'POST'});
+            if (res.ok) {
+                document.getElementById('eeExitSection').style.display = 'none';
+                portfolioEventsCache = {}; detailCache = {}; historyCache = {}; loadPortfolio();
+            }
+        }
+
+        async function saveEventEdit(eventId) {
+            const date = document.getElementById('ev-date-' + eventId).value;
+            const price = parseFloat(document.getElementById('ev-price-' + eventId).value);
+            if (!date) { alert('Data obbligatoria'); return; }
+            const res = await fetch('/api/portfolio/events/' + eventId, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({event_date: date, event_price: isNaN(price) ? null : price})
+            });
+            if (res.ok) { portfolioEventsCache = {}; detailCache = {}; }
+            else { const d = await res.json(); alert('Errore: ' + (d.error||'?')); }
+        }
+
+        async function deleteEvent(eventId, isin) {
+            if (!confirm('Eliminare questo evento?')) return;
+            const res = await fetch('/api/portfolio/events/' + eventId, {method: 'DELETE'});
+            if (res.ok) {
+                portfolioEventsCache = {};
+                detailCache = {};
+                loadEditEvents(isin);
+            }
+        }
+
+        function closeEditEventsModal() {
+            document.getElementById('editEventsModal').classList.remove('open');
+            _editIsin = null;
         }
 
         async function submitPortfolioEntry() {
@@ -1521,13 +1860,33 @@
                 document.getElementById('detailKpis').innerHTML = '<span style="color:#888;">' + data.error + '</span>';
                 return;
             }
-            if (data.portfolio_analysis && !data.portfolio_analysis.error) {
-                renderPortfolioPanels(data.portfolio_analysis, data.current);
+
+            // Carica eventi portafoglio (switch) per questo fondo, usando cache
+            let switchEvents = portfolioEventsCache[isin];
+            if (switchEvents === undefined && portfolioIsins.has(isin)) {
+                try {
+                    const evRes = await fetch('/api/portfolio/events/' + isin);
+                    const evData = await evRes.json();
+                    switchEvents = evData.events || [];
+                    portfolioEventsCache[isin] = switchEvents;
+                } catch(e) { switchEvents = []; }
+            }
+
+            // Arricchisci portfolio_analysis con exit info se disponibile
+            const pfEntry = (portfolioData || []).find(x => x.isin === isin);
+            let pa = data.portfolio_analysis;
+            if (pa && pfEntry) {
+                pa.exit_date = pfEntry.exit_date || null;
+                pa.exit_price = pfEntry.exit_price || null;
+            }
+
+            if (pa && !pa.error) {
+                renderPortfolioPanels(pa, data.current);
             }
             renderDetailKpis(data);
             renderPurityPanel(data.signal_purity, data.asset_type);
             renderDetailSentiment(data.sentiment);
-            renderDetailChart(data.history, data.portfolio_analysis);
+            renderDetailChart(data.history, pa, switchEvents || []);
             renderDetailTable(data.history);
             renderAnalysisNarrative(data);
         }
@@ -1618,7 +1977,7 @@
             }).join('');
         }
 
-        function renderDetailChart(history, pa) {
+        function renderDetailChart(history, pa, switchEvents) {
             if (detailChart) { detailChart.destroy(); detailChart = null; }
             const ctx = document.getElementById('detailChart').getContext('2d');
             const labels = history.map(r => r.date);
@@ -1629,7 +1988,13 @@
             // Indice della data di acquisto portafoglio
             const entryDate = pa?.entry_date || null;
             const entryPrice = pa?.entry_price || null;
+            const exitDate = pa?.exit_date || null;
+            const exitPrice = pa?.exit_price || null;
             const entryIdx = entryDate ? labels.findIndex(l => l >= entryDate) : -1;
+            const pfExitIdx = exitDate ? labels.findIndex(l => l >= exitDate) : -1;
+
+            // Switch events per questo fondo
+            const switches = (switchEvents || []).filter(e => e.event_type === 'switch');
 
             // Date L1 entrata / uscita — cercate sia in tracking attivo che in storico uscite
             const _isin = currentDetailIsin;
@@ -1641,23 +2006,96 @@
             const l1ExitIdx   = l1ExitDate  ? labels.findIndex(l => l >= l1ExitDate.substring(0,10))  : -1;
             const l1ExitGain  = _l1Exit?.pct_gain != null ? _l1Exit.pct_gain.toFixed(2) + '%' : null;
 
-            // Plugin: linea acquisto portafoglio (verde tratteggiata)
+            // Plugin: linea acquisto portafoglio (verde tratteggiata) + area holding + uscita rossa Port.
             const entryLinePlugin = {
                 id: 'entryLine',
                 afterDraw(chart) {
-                    if (entryIdx < 0 || !entryPrice) return;
                     const { ctx: c, scales: { x, y } } = chart;
-                    const xPos = x.getPixelForValue(entryIdx);
                     c.save();
-                    c.strokeStyle = '#00FF88';
-                    c.lineWidth = 1.5;
-                    c.setLineDash([5, 4]);
-                    c.globalAlpha = 0.7;
-                    c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
-                    c.setLineDash([]); c.globalAlpha = 1;
-                    c.fillStyle = '#00FF88'; c.font = 'bold 10px sans-serif'; c.textAlign = 'left';
-                    const yPos = y.getPixelForValue(entryPrice);
-                    if (yPos > y.top && yPos < y.bottom) c.fillText('✦ ' + entryPrice.toFixed(4), xPos + 4, yPos - 3);
+
+                    // Area shaded blu — periodo detenzione portafoglio
+                    if (entryIdx >= 0) {
+                        const xEntry = x.getPixelForValue(entryIdx);
+                        const xEnd   = pfExitIdx >= 0
+                            ? x.getPixelForValue(pfExitIdx)
+                            : x.getPixelForValue(labels.length - 1);
+                        c.fillStyle = 'rgba(68,114,196,0.07)';
+                        c.fillRect(xEntry, y.top, xEnd - xEntry, y.bottom - y.top);
+                    }
+
+                    // Linea verde — entrata portafoglio
+                    if (entryIdx >= 0 && entryPrice) {
+                        const xPos = x.getPixelForValue(entryIdx);
+                        c.strokeStyle = '#00FF88';
+                        c.lineWidth = 1.5;
+                        c.setLineDash([5, 4]);
+                        c.globalAlpha = 0.8;
+                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+                        c.setLineDash([]); c.globalAlpha = 1;
+                        c.fillStyle = '#00FF88';
+                        c.font = 'bold 9px sans-serif';
+                        c.textAlign = 'center';
+                        c.fillText('▶ Port.', xPos, y.top + 10);
+                        c.font = '8px sans-serif';
+                        c.fillText(entryDate, xPos, y.top + 20);
+                        const yPos = y.getPixelForValue(entryPrice);
+                        if (yPos > y.top && yPos < y.bottom) {
+                            c.font = 'bold 9px sans-serif';
+                            c.textAlign = 'left';
+                            c.fillText('✦ ' + entryPrice.toFixed(4), xPos + 4, yPos - 3);
+                        }
+                    }
+
+                    // Linee bianche — switch portafoglio
+                    switches.forEach((sw, i) => {
+                        const swDate = sw.event_date ? sw.event_date.substring(0,10) : null;
+                        if (!swDate) return;
+                        const swIdx = labels.findIndex(l => l >= swDate);
+                        if (swIdx < 0) return;
+                        const xPos = x.getPixelForValue(swIdx);
+                        c.strokeStyle = '#ffffff';
+                        c.lineWidth = 1.5;
+                        c.setLineDash([4, 3]);
+                        c.globalAlpha = 0.65;
+                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+                        c.setLineDash([]); c.globalAlpha = 1;
+                        c.fillStyle = '#ffffff';
+                        c.font = 'bold 9px sans-serif';
+                        c.textAlign = 'center';
+                        c.fillText('⇄', xPos, y.top + 10 + (i % 2) * 10);
+                        c.font = '8px sans-serif';
+                        c.fillText(swDate, xPos, y.top + 20 + (i % 2) * 10);
+                        if (sw.target_fund_name) {
+                            c.fillStyle = 'rgba(255,255,255,0.5)';
+                            c.font = '7px sans-serif';
+                            const label = sw.target_fund_name.length > 12 ? sw.target_fund_name.substring(0,12) + '…' : sw.target_fund_name;
+                            c.fillText('→ ' + label, xPos, y.top + 32 + (i % 2) * 10);
+                        }
+                    });
+
+                    // Linea rossa — uscita portafoglio
+                    if (pfExitIdx >= 0 && exitPrice) {
+                        const xPos = x.getPixelForValue(pfExitIdx);
+                        c.strokeStyle = '#FF4466';
+                        c.lineWidth = 1.5;
+                        c.setLineDash([5, 3]);
+                        c.globalAlpha = 0.8;
+                        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+                        c.setLineDash([]); c.globalAlpha = 1;
+                        c.fillStyle = '#FF4466';
+                        c.font = 'bold 9px sans-serif';
+                        c.textAlign = 'center';
+                        c.fillText('◀ Exit Port.', xPos, y.bottom - 22);
+                        c.font = '8px sans-serif';
+                        c.fillText(exitDate, xPos, y.bottom - 12);
+                        const yPos = y.getPixelForValue(exitPrice);
+                        if (yPos > y.top && yPos < y.bottom) {
+                            c.font = 'bold 9px sans-serif';
+                            c.textAlign = 'right';
+                            c.fillText(exitPrice.toFixed(4), xPos - 4, yPos - 3);
+                        }
+                    }
+
                     c.restore();
                 }
             };
@@ -1685,7 +2123,6 @@
                         c.setLineDash([]);
                         c.globalAlpha = 0.9;
                         c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
-                        // Etichetta
                         c.fillStyle = '#00B050';
                         c.font = 'bold 9px sans-serif';
                         c.textAlign = 'center';
@@ -1702,7 +2139,6 @@
                         c.setLineDash([]);
                         c.globalAlpha = 0.9;
                         c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
-                        // Etichetta
                         c.fillStyle = '#DC3545';
                         c.font = 'bold 9px sans-serif';
                         c.textAlign = 'center';

@@ -188,9 +188,42 @@ class PriceDatabase:
                         entry_date DATE NOT NULL,
                         entry_price DECIMAL(12, 4) NOT NULL,
                         fund_name VARCHAR(200),
-                        added_at TIMESTAMP DEFAULT NOW()
+                        added_at TIMESTAMP DEFAULT NOW(),
+                        exit_date DATE,
+                        exit_price DECIMAL(12, 4),
+                        status VARCHAR(20) DEFAULT 'active'
                     )
                 """)
+                # Aggiunge colonne nuove se la tabella esisteva già
+                cur.execute("""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='portfolio_entries' AND column_name='exit_date') THEN
+                            ALTER TABLE portfolio_entries ADD COLUMN exit_date DATE;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='portfolio_entries' AND column_name='exit_price') THEN
+                            ALTER TABLE portfolio_entries ADD COLUMN exit_price DECIMAL(12,4);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='portfolio_entries' AND column_name='status') THEN
+                            ALTER TABLE portfolio_entries ADD COLUMN status VARCHAR(20) DEFAULT 'active';
+                        END IF;
+                    END $$;
+                """)
+                # Tabella eventi portafoglio (switch, uscita parziale, ecc.)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS portfolio_events (
+                        id SERIAL PRIMARY KEY,
+                        isin VARCHAR(20) NOT NULL,
+                        event_type VARCHAR(20) NOT NULL,
+                        event_date DATE NOT NULL,
+                        event_price DECIMAL(12, 4),
+                        target_isin VARCHAR(20),
+                        target_fund_name VARCHAR(200),
+                        notes TEXT,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_events_isin ON portfolio_events(isin)")
                 # Storico uscite da L1 (fondi che hanno lasciato il livello 1)
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS l1_exit_history (
@@ -613,7 +646,8 @@ class PriceDatabase:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT isin, entry_date, entry_price, fund_name, added_at
+                    SELECT isin, entry_date, entry_price, fund_name, added_at,
+                           exit_date, exit_price, status
                     FROM portfolio_entries
                     ORDER BY added_at DESC
                 """)
@@ -624,7 +658,10 @@ class PriceDatabase:
                         'entry_date': str(r['entry_date']),
                         'entry_price': float(r['entry_price']),
                         'fund_name': r['fund_name'] or '',
-                        'added_at': str(r['added_at'])
+                        'added_at': str(r['added_at']),
+                        'exit_date': str(r['exit_date']) if r['exit_date'] else None,
+                        'exit_price': float(r['exit_price']) if r['exit_price'] else None,
+                        'status': r['status'] or 'active',
                     }
                     for r in rows
                 ]
@@ -693,6 +730,182 @@ class PriceDatabase:
             DataFrame con colonne [date, price] ordinato per data crescente
         """
         return self.get_prices(isin, days)
+
+    def update_portfolio_entry(self, isin: str, entry_date: str, entry_price: float,
+                               fund_name: str = None) -> bool:
+        """Aggiorna data/prezzo di entrata di un fondo nel portafoglio."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                if fund_name is not None:
+                    cur.execute("""
+                        UPDATE portfolio_entries
+                        SET entry_date=%s, entry_price=%s, fund_name=%s
+                        WHERE isin=%s
+                    """, (entry_date, float(entry_price), fund_name, isin.upper()))
+                else:
+                    cur.execute("""
+                        UPDATE portfolio_entries
+                        SET entry_date=%s, entry_price=%s
+                        WHERE isin=%s
+                    """, (entry_date, float(entry_price), isin.upper()))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore update_portfolio_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def exit_portfolio_entry(self, isin: str, exit_date: str, exit_price: float) -> bool:
+        """Marca un fondo come uscito (status=exited) e registra data/prezzo uscita."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE portfolio_entries
+                    SET exit_date=%s, exit_price=%s, status='exited'
+                    WHERE isin=%s
+                """, (exit_date, float(exit_price), isin.upper()))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore exit_portfolio_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def reactivate_portfolio_entry(self, isin: str) -> bool:
+        """Riporta un fondo a status=active (annulla uscita)."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE portfolio_entries
+                    SET exit_date=NULL, exit_price=NULL, status='active'
+                    WHERE isin=%s
+                """, (isin.upper(),))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore reactivate_portfolio_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    # ── Portfolio Events ──────────────────────────────────────────────────────
+
+    def add_portfolio_event(self, isin: str, event_type: str, event_date: str,
+                            event_price: float = None, target_isin: str = None,
+                            target_fund_name: str = None, notes: str = None) -> int:
+        """
+        Aggiunge un evento al portafoglio (switch, exit, ecc.).
+        Restituisce l'id del record creato o -1 in caso di errore.
+        """
+        conn = self._get_connection()
+        if not conn:
+            return -1
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO portfolio_events
+                        (isin, event_type, event_date, event_price, target_isin, target_fund_name, notes)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (isin.upper(), event_type, event_date,
+                      float(event_price) if event_price is not None else None,
+                      target_isin.upper() if target_isin else None,
+                      target_fund_name, notes))
+                row = cur.fetchone()
+                conn.commit()
+                return row[0] if row else -1
+        except Exception as e:
+            logging.error(f"Errore add_portfolio_event {isin}: {e}")
+            return -1
+        finally:
+            conn.close()
+
+    def get_portfolio_events(self, isin: str) -> List[Dict]:
+        """Restituisce tutti gli eventi registrati per un fondo."""
+        conn = self._get_connection()
+        if not conn:
+            return []
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT id, isin, event_type, event_date, event_price,
+                           target_isin, target_fund_name, notes, created_at
+                    FROM portfolio_events
+                    WHERE isin = %s
+                    ORDER BY event_date ASC, created_at ASC
+                """, (isin.upper(),))
+                rows = cur.fetchall()
+                return [
+                    {
+                        'id': r['id'],
+                        'isin': r['isin'],
+                        'event_type': r['event_type'],
+                        'event_date': str(r['event_date']),
+                        'event_price': float(r['event_price']) if r['event_price'] else None,
+                        'target_isin': r['target_isin'] or '',
+                        'target_fund_name': r['target_fund_name'] or '',
+                        'notes': r['notes'] or '',
+                    }
+                    for r in rows
+                ]
+        except Exception as e:
+            logging.error(f"Errore get_portfolio_events {isin}: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def update_portfolio_event(self, event_id: int, event_date: str,
+                               event_price: float = None, target_isin: str = None,
+                               target_fund_name: str = None, notes: str = None) -> bool:
+        """Modifica un evento esistente."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE portfolio_events
+                    SET event_date=%s, event_price=%s, target_isin=%s,
+                        target_fund_name=%s, notes=%s
+                    WHERE id=%s
+                """, (event_date,
+                      float(event_price) if event_price is not None else None,
+                      target_isin.upper() if target_isin else None,
+                      target_fund_name, notes, event_id))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore update_portfolio_event {event_id}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def delete_portfolio_event(self, event_id: int) -> bool:
+        """Elimina un evento portafoglio."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM portfolio_events WHERE id=%s", (event_id,))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore delete_portfolio_event {event_id}: {e}")
+            return False
+        finally:
+            conn.close()
 
 
 def test_database():
