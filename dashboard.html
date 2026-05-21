@@ -420,27 +420,43 @@
 
     <!-- Modal Switch -->
     <div class="modal-overlay" id="switchModal" onclick="if(event.target===this)closeSwitchModal()">
-        <div class="modal-box">
+        <div class="modal-box-wide">
             <h3>&#8644; Switch Parziale</h3>
-            <div id="switchFundLabel" style="font-size:0.8em;color:#aaa;margin-bottom:4px;"></div>
-            <div style="font-size:0.72em;color:#555;margin-bottom:14px;">Il NAV del fondo di partenza viene recuperato automaticamente dallo storico alla data indicata.</div>
+            <div id="switchFundLabel" style="font-size:0.82em;color:#5A8FD4;font-weight:bold;margin-bottom:16px;"></div>
             <input type="hidden" id="swIsin">
+
+            <div style="font-size:0.72em;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;border-left:2px solid #00B050;padding-left:6px;">Fondo di Partenza</div>
+            <div style="display:flex;gap:12px;margin-bottom:16px;">
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>Data NAV partenza</label>
+                    <input type="date" id="swDate">
+                </div>
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>NAV partenza</label>
+                    <input type="number" id="swPrice" step="0.0001" min="0" placeholder="es. 202.6053">
+                </div>
+            </div>
+
+            <div style="font-size:0.72em;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;border-left:2px solid #FFC000;padding-left:6px;">Fondo di Destinazione</div>
             <div class="modal-field">
-                <label>Data Switch</label>
-                <input type="date" id="swDate">
+                <label>Nome fondo destinazione</label>
+                <input type="text" id="swTargetName" placeholder="es. Schroder Euro Liquidity">
             </div>
             <div class="modal-field">
-                <label>Fondo Destinazione (nome)</label>
-                <input type="text" id="swTargetName" placeholder="es. Amundi Euro Liquidity">
+                <label>ISIN destinazione (opzionale)</label>
+                <input type="text" id="swTargetIsin" placeholder="es. LU0136043394" style="font-family:monospace;font-size:0.82em;">
             </div>
-            <div class="modal-field">
-                <label>ISIN Destinazione (opzionale)</label>
-                <input type="text" id="swTargetIsin" placeholder="es. LU1234567890" style="font-family:monospace;font-size:0.82em;">
+            <div style="display:flex;gap:12px;margin-bottom:14px;">
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>Data sottoscrizione destinazione</label>
+                    <input type="date" id="swTargetDate">
+                </div>
+                <div class="modal-field" style="flex:1;margin-bottom:0;">
+                    <label>NAV destinazione</label>
+                    <input type="number" id="swTargetPrice" step="0.0001" min="0" placeholder="es. 12.3456">
+                </div>
             </div>
-            <div class="modal-field">
-                <label>NAV Fondo Destinazione</label>
-                <input type="number" id="swTargetPrice" step="0.0001" min="0" placeholder="es. 12.3456">
-            </div>
+
             <div class="modal-field">
                 <label>Note (opzionale)</label>
                 <input type="text" id="swNotes" placeholder="es. Switch 80% verso MM">
@@ -1554,7 +1570,9 @@
             const p = (portfolioData || []).find(x => x.isin === isin) || {};
             document.getElementById('swIsin').value = isin;
             document.getElementById('switchFundLabel').textContent = p.fund_name || isin;
-            document.getElementById('swDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('swDate').value = '';
+            document.getElementById('swPrice').value = '';
+            document.getElementById('swTargetDate').value = '';
             document.getElementById('swTargetPrice').value = '';
             document.getElementById('swTargetName').value = '';
             document.getElementById('swTargetIsin').value = '';
@@ -1569,13 +1587,17 @@
         async function submitSwitch() {
             const isin = document.getElementById('swIsin').value;
             const date = document.getElementById('swDate').value;
+            const price = parseFloat(document.getElementById('swPrice').value);
+            const targetDate = document.getElementById('swTargetDate').value;
             const targetPrice = parseFloat(document.getElementById('swTargetPrice').value);
             const targetName = document.getElementById('swTargetName').value.trim();
             const targetIsin = document.getElementById('swTargetIsin').value.trim();
             const notes = document.getElementById('swNotes').value.trim();
-            if (!date) { alert('Inserisci la data dello switch'); return; }
+            if (!date) { alert('Inserisci la data NAV del fondo di partenza'); return; }
             const payload = {
                 event_date: date,
+                event_price: isNaN(price) || price <= 0 ? null : price,
+                target_date: targetDate || null,
                 target_price: isNaN(targetPrice) || targetPrice <= 0 ? null : targetPrice,
                 target_fund_name: targetName || null,
                 target_isin: targetIsin || null,
@@ -1679,13 +1701,18 @@
                     return;
                 }
                 list.innerHTML = `<table class="ev-table">
-                    <thead><tr><th>Data</th><th>NAV Origine</th><th>NAV Destinaz.</th><th>Destinazione</th><th></th></tr></thead>
+                    <thead><tr>
+                        <th>Data Partenza</th><th>NAV Partenza</th>
+                        <th>Data Destinaz.</th><th>NAV Destinaz.</th>
+                        <th>Destinazione</th><th></th>
+                    </tr></thead>
                     <tbody>${evs.map(ev => `
                         <tr id="ev-row-${ev.id}">
-                            <td><input type="date" value="${ev.event_date}" id="ev-date-${ev.id}" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;padding:2px 5px;font-size:0.9em;width:110px;"></td>
-                            <td><input type="number" value="${ev.event_price||''}" id="ev-price-${ev.id}" step="0.0001" placeholder="—" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;padding:2px 5px;font-size:0.9em;width:85px;"></td>
-                            <td><input type="number" value="${ev.target_price||''}" id="ev-tprice-${ev.id}" step="0.0001" placeholder="—" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#FFC000;padding:2px 5px;font-size:0.9em;width:85px;"></td>
-                            <td style="color:#aaa;font-size:0.9em;">${ev.target_fund_name||ev.target_isin||'—'}</td>
+                            <td><input type="date" value="${ev.event_date}" id="ev-date-${ev.id}" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;padding:2px 5px;font-size:0.85em;width:108px;"></td>
+                            <td><input type="number" value="${ev.event_price||''}" id="ev-price-${ev.id}" step="0.0001" placeholder="—" style="background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;padding:2px 5px;font-size:0.85em;width:80px;"></td>
+                            <td><input type="date" value="${ev.target_date||''}" id="ev-tdate-${ev.id}" style="background:transparent;border:1px solid rgba(255,193,0,0.2);border-radius:4px;color:#FFC000;padding:2px 5px;font-size:0.85em;width:108px;"></td>
+                            <td><input type="number" value="${ev.target_price||''}" id="ev-tprice-${ev.id}" step="0.0001" placeholder="—" style="background:transparent;border:1px solid rgba(255,193,0,0.2);border-radius:4px;color:#FFC000;padding:2px 5px;font-size:0.85em;width:80px;"></td>
+                            <td style="color:#aaa;font-size:0.85em;">${ev.target_fund_name||ev.target_isin||'—'}</td>
                             <td style="white-space:nowrap;">
                                 <button class="btn-edit-ev" onclick="saveEventEdit(${ev.id})" style="padding:2px 6px;">&#10003;</button>
                                 <button class="btn-remove" onclick="deleteEvent(${ev.id},'${isin}')" style="padding:2px 6px;margin-left:3px;">&#10005;</button>
@@ -1738,14 +1765,16 @@
         async function saveEventEdit(eventId) {
             const date = document.getElementById('ev-date-' + eventId).value;
             const price = parseFloat(document.getElementById('ev-price-' + eventId).value);
+            const tdate = document.getElementById('ev-tdate-' + eventId).value;
             const tprice = parseFloat(document.getElementById('ev-tprice-' + eventId).value);
-            if (!date) { alert('Data obbligatoria'); return; }
+            if (!date) { alert('Data partenza obbligatoria'); return; }
             const res = await fetch('/api/portfolio/events/' + eventId, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     event_date: date,
                     event_price: isNaN(price) ? null : price,
+                    target_date: tdate || null,
                     target_price: isNaN(tprice) ? null : tprice
                 })
             });

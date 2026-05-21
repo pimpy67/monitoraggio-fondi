@@ -221,6 +221,7 @@ class PriceDatabase:
                         target_fund_name VARCHAR(200),
                         notes TEXT,
                         target_price DECIMAL(12, 4),
+                        target_date DATE,
                         created_at TIMESTAMP DEFAULT NOW()
                     )
                 """)
@@ -229,6 +230,9 @@ class PriceDatabase:
                     BEGIN
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='portfolio_events' AND column_name='target_price') THEN
                             ALTER TABLE portfolio_events ADD COLUMN target_price DECIMAL(12,4);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='portfolio_events' AND column_name='target_date') THEN
+                            ALTER TABLE portfolio_events ADD COLUMN target_date DATE;
                         END IF;
                     END $$;
                 """)
@@ -813,11 +817,11 @@ class PriceDatabase:
     def add_portfolio_event(self, isin: str, event_type: str, event_date: str,
                             event_price: float = None, target_isin: str = None,
                             target_fund_name: str = None, notes: str = None,
-                            target_price: float = None) -> int:
+                            target_price: float = None, target_date: str = None) -> int:
         """
         Aggiunge un evento al portafoglio (switch, exit, ecc.).
-        event_price = NAV fondo origine al momento dell'evento (opzionale)
-        target_price = NAV fondo destinazione al momento dello switch (opzionale)
+        event_date/event_price = data e NAV del fondo di partenza
+        target_date/target_price = data e NAV del fondo di destinazione
         Restituisce l'id del record creato o -1 in caso di errore.
         """
         conn = self._get_connection()
@@ -828,14 +832,15 @@ class PriceDatabase:
                 cur.execute("""
                     INSERT INTO portfolio_events
                         (isin, event_type, event_date, event_price, target_isin,
-                         target_fund_name, notes, target_price)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                         target_fund_name, notes, target_price, target_date)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 """, (isin.upper(), event_type, event_date,
                       float(event_price) if event_price is not None else None,
                       target_isin.upper() if target_isin else None,
                       target_fund_name, notes,
-                      float(target_price) if target_price is not None else None))
+                      float(target_price) if target_price is not None else None,
+                      target_date or None))
                 row = cur.fetchone()
                 conn.commit()
                 return row[0] if row else -1
@@ -854,7 +859,7 @@ class PriceDatabase:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     SELECT id, isin, event_type, event_date, event_price,
-                           target_isin, target_fund_name, notes, target_price, created_at
+                           target_isin, target_fund_name, notes, target_price, target_date, created_at
                     FROM portfolio_events
                     WHERE isin = %s
                     ORDER BY event_date ASC, created_at ASC
@@ -871,6 +876,7 @@ class PriceDatabase:
                         'target_fund_name': r['target_fund_name'] or '',
                         'notes': r['notes'] or '',
                         'target_price': float(r['target_price']) if r['target_price'] else None,
+                        'target_date': str(r['target_date']) if r['target_date'] else None,
                     }
                     for r in rows
                 ]
@@ -883,7 +889,7 @@ class PriceDatabase:
     def update_portfolio_event(self, event_id: int, event_date: str,
                                event_price: float = None, target_isin: str = None,
                                target_fund_name: str = None, notes: str = None,
-                               target_price: float = None) -> bool:
+                               target_price: float = None, target_date: str = None) -> bool:
         """Modifica un evento esistente."""
         conn = self._get_connection()
         if not conn:
@@ -893,13 +899,14 @@ class PriceDatabase:
                 cur.execute("""
                     UPDATE portfolio_events
                     SET event_date=%s, event_price=%s, target_isin=%s,
-                        target_fund_name=%s, notes=%s, target_price=%s
+                        target_fund_name=%s, notes=%s, target_price=%s, target_date=%s
                     WHERE id=%s
                 """, (event_date,
                       float(event_price) if event_price is not None else None,
                       target_isin.upper() if target_isin else None,
                       target_fund_name, notes,
                       float(target_price) if target_price is not None else None,
+                      target_date or None,
                       event_id))
                 conn.commit()
                 return True

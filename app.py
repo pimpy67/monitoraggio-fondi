@@ -608,48 +608,33 @@ def reactivate_portfolio(isin):
 
 @app.route('/api/portfolio/<isin>/switch', methods=['POST'])
 def add_switch_event(isin):
-    """Registra uno switch (uscita parziale) su un fondo del portafoglio.
-    event_price = NAV fondo origine, auto-recuperato da price_history alla data dello switch.
-    target_price = NAV fondo destinazione, inserito dall'utente.
+    """Registra uno switch su un fondo del portafoglio.
+    Tutti i dati inseriti manualmente dall'utente:
+    event_date/event_price  = data e NAV del fondo di partenza
+    target_date/target_price = data e NAV del fondo di destinazione
     """
     try:
         isin = isin.strip().upper()
         data = request.get_json() or {}
         event_date = (data.get('event_date') or '').strip()
-        target_price = data.get('target_price')     # NAV fondo destinazione (utente)
+        event_price = data.get('event_price')
+        target_date = (data.get('target_date') or '').strip() or None
+        target_price = data.get('target_price')
         target_isin = (data.get('target_isin') or '').strip().upper() or None
         target_fund_name = (data.get('target_fund_name') or '').strip() or None
         notes = (data.get('notes') or '').strip() or None
         if not event_date:
-            return jsonify({'error': 'event_date obbligatorio'}), 400
+            return jsonify({'error': 'Data switch fondo partenza obbligatoria'}), 400
         try:
+            event_price = float(event_price) if event_price is not None else None
             target_price = float(target_price) if target_price is not None else None
         except (ValueError, TypeError):
-            return jsonify({'error': 'target_price deve essere un numero'}), 400
-
-        # Auto-recupera NAV fondo origine da price_history alla data dello switch
-        event_price = None
-        try:
-            prices_df = db.get_prices(isin, days=90)
-            if not prices_df.empty:
-                prices_df['date_str'] = prices_df['date'].astype(str).str[:10]
-                # Cerca la data esatta, poi la più vicina prima
-                exact = prices_df[prices_df['date_str'] == event_date]
-                if not exact.empty:
-                    event_price = float(exact.iloc[-1]['price'])
-                else:
-                    before = prices_df[prices_df['date_str'] <= event_date]
-                    if not before.empty:
-                        event_price = float(before.iloc[-1]['price'])
-        except Exception:
-            pass
-
+            return jsonify({'error': 'I prezzi devono essere numeri'}), 400
         eid = db.add_portfolio_event(isin, 'switch', event_date, event_price,
                                      target_isin, target_fund_name, notes,
-                                     target_price=target_price)
+                                     target_price=target_price, target_date=target_date)
         if eid >= 0:
-            return jsonify({'status': 'ok', 'id': eid, 'isin': isin,
-                            'event_price': event_price})
+            return jsonify({'status': 'ok', 'id': eid, 'isin': isin})
         return jsonify({'error': 'Errore salvataggio'}), 503
     except Exception as e:
         logging.error(f"Errore route switch {isin}: {e}")
@@ -672,6 +657,7 @@ def update_portfolio_event(event_id):
         event_date = data.get('event_date', '')
         event_price = data.get('event_price')
         target_price = data.get('target_price')
+        target_date = (data.get('target_date') or '').strip() or None
         target_isin = (data.get('target_isin') or '').strip().upper() or None
         target_fund_name = (data.get('target_fund_name') or '').strip() or None
         notes = (data.get('notes') or '').strip() or None
@@ -684,7 +670,7 @@ def update_portfolio_event(event_id):
             return jsonify({'error': 'I prezzi devono essere numeri'}), 400
         ok = db.update_portfolio_event(event_id, event_date, event_price,
                                        target_isin, target_fund_name, notes,
-                                       target_price=target_price)
+                                       target_price=target_price, target_date=target_date)
         if ok:
             return jsonify({'status': 'ok', 'id': event_id})
         return jsonify({'error': 'Errore aggiornamento'}), 503
