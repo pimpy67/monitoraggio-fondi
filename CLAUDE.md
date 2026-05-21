@@ -70,6 +70,7 @@ docker exec fund-monitor-postgres-1 psql -U fundmonitor -d funds -c "<SQL>"
 | `dashboard.html` | Frontend SPA (HTML+JS, servito da Flask) |
 | `fondi_monitoraggio.xlsx` | Excel con tutti i fondi — fonte di verità per lista e livelli |
 | `backfill_historical.py` | Backfill storico da FT Markets (richiede 210gg, ottiene ~20-22gg reali) |
+| `technical_analysis.py` | **136 fondi monitorati** (aggiornato 21/05/2026 — era 97) |
 
 ### Variabili d'ambiente `.env`
 ```
@@ -176,26 +177,32 @@ Se variazione giornaliera NAV ≤ −3%: nuovi ingressi L0 e L1 bloccati; uscite
 | ADX threshold | 25 | 25 | 25 | 25 | n/a | n/a | n/a | n/a |
 | RSI oversold | 30 | 30 | 30 | 30 | 25 | 35 | 35 | 33 |
 | RSI overbought | 70 | 70 | 70 | 70 | 97 | 70 | 70 | 70 |
-| **RSI ottimale L1** | **55–65** | **55–65** | **54–66** | **54–66** | **40–95** | **45–68** | **48–65** | **50–66** |
-| Max dist MM20 | 2.5% | 3.0% | 2.5% | 3.0% | 0.5% | 1.5% | 2.0% | 3.0% |
+| **RSI ottimale L1** | **55–65** | **55–65** | **54–70** | **54–66** | **40–95** | **45–68** | **48–65** | **50–66** |
+| Max dist MM20 | 2.5% | 3.0% | 3.5%* | 3.0% | 0.5% | 1.5% | 2.0% | 3.0% |
 | Giorni sopra MM20 | 5 | 5 | 5 | 5 | 3 | 3 | 3 | 3 |
 | Bollinger σ | 2.0 | 2.0 | 2.0 | 2.0 | 1.0 | 1.5 | 1.7 | 1.8 |
 | RSI stanchezza (Regola C) | >75 | >75 | >75 | >75 | **>92** | >75 | >75 | >75 |
 
 > **money_market**: RSI strutturalmente alto (80-90) per natura dello strumento (NAV cresce ~linearmente). Non indica ipercomprato. ADX non richiesto. Regola C alzata a >92 per evitare uscite premature su normali oscillazioni RSI.
+> **sector_thematic** *: Max dist MM20 3.5% ordinaria; sale a **5%** se breakout giornaliero ≥+3.5% con RSI<75 e MM20>MM50 (override per strappi violenti tipici dei fondi tematici).
 
 ### Rilevamento asset_type da categoria Excel
+> **Ordine di priorità** nel codice: money_market → sector_thematic → high_yield → emerging → commodities → bond → equity_developed
+> Il check `sector_thematic` è **anticipato** rispetto a `high_yield` per evitare falsi match (es. "Energie **Alternative**" contiene `alternativ` ma è settoriale).
+
 | Categoria contiene | → asset_type |
 |--------------------|--------------|
 | `monetar`, `liquidity`, `money market` | `money_market` |
+| `settorial`, `thematic`, `tecnolog`, `healthcare`, `salute`, `energia`, `infrastruttur`, `real estate`, `immobil`, `biotech`, `pharma`, `fintech`, `consumi`, `lusso`, `consumer`, `acqua`, `water`, `agri`, `food`, `nutrizi`, `cyber`, `security`, `biotecnolog`, `farmac` | `sector_thematic` |
 | `alternativ`, `bilanc`, `multi-asset`, `absolute return` | `high_yield` |
 | `emerging`, `cina`, `india`, `asia pacific` | `emerging_markets` |
-| `tecnolog`, `healthcare`, `real estate`, `settoriale` | `sector_thematic` |
-| `materie prime`, `oro`, `gold`, `commodity` | `commodities` |
+| `materie prime`, `oro`, `gold`, `commodity`, `metalli`, `petrolio` | `commodities` |
 | `high yield`, `high-yield` | `high_yield` |
 | `corporate`, `credit` | `bond_corporate` |
 | `obblig`, `bond`, `fixed` (altri) | `bond_government` |
 | tutto il resto | `equity_developed` |
+
+> **Bug storico corretto (21/05/2026)**: il codice cercava `settoriale` (singolare) che non matchava `settoriali` (plurale) nelle categorie Excel — 18 fondi erano mal classificati come `equity_developed`.
 
 ### Benchmark per signal purity
 | asset_type | Benchmark |
