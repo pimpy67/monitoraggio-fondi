@@ -2045,7 +2045,9 @@
             const _l1Exit  = l1ExitsData.find(e => e.isin === _isin) || null;
             const l1EntryDate = _l1Track?.entry_date || _l1Exit?.entry_date || null;
             const l1ExitDate  = _l1Exit?.exit_date || null;
-            const l1EntryIdx  = l1EntryDate ? labels.findIndex(l => l >= l1EntryDate.substring(0,10)) : -1;
+            let l1EntryIdx = l1EntryDate ? labels.findIndex(l => l >= l1EntryDate.substring(0,10)) : -1;
+            if (l1EntryIdx === -1 && l1EntryDate && labels.length > 0 && l1EntryDate.substring(0,10) > labels[labels.length - 1])
+                l1EntryIdx = labels.length - 1;
             const l1ExitIdx   = l1ExitDate  ? labels.findIndex(l => l >= l1ExitDate.substring(0,10))  : -1;
             const l1ExitGain  = _l1Exit?.pct_gain != null ? _l1Exit.pct_gain.toFixed(2) + '%' : null;
 
