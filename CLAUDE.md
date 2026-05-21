@@ -70,7 +70,6 @@ docker exec fund-monitor-postgres-1 psql -U fundmonitor -d funds -c "<SQL>"
 | `dashboard.html` | Frontend SPA (HTML+JS, servito da Flask) |
 | `fondi_monitoraggio.xlsx` | Excel con tutti i fondi — fonte di verità per lista e livelli |
 | `backfill_historical.py` | Backfill storico da FT Markets (richiede 210gg, ottiene ~20-22gg reali) |
-| `technical_analysis.py` | **136 fondi monitorati** (aggiornato 21/05/2026 — era 97) |
 
 ### Variabili d'ambiente `.env`
 ```
@@ -98,17 +97,70 @@ RUN_ON_START=false
 ### Percorsi
 | Risorsa | Percorso |
 |---------|----------|
+| Sorgente codice (Mac) | `/Users/user/Documents/CORSO_ITS/APPLICAZIONI _ APP/MONITORAGGIO FONDI/etf_monitor_system/` |
 | Sorgente codice (VPS) | `/root/etf_monitor_system/` |
-| Docker Compose | porta **5001** |
+| Container | `etf_monitor_system-app-1` → porta **5001** |
 | Dashboard | `https://etf.andreapavan.tech` |
 | Nginx config | `/etc/nginx/sites-enabled/etf` |
+| Git remote | `origin` → `git@github-pimpy67:pimpy67/etf-monitor-system.git` |
+
+### Comandi rapidi ETF
+```bash
+# Copia file Mac → VPS
+scp "/Users/user/Documents/CORSO_ITS/APPLICAZIONI _ APP/MONITORAGGIO FONDI/etf_monitor_system/<file>" root@76.13.37.133:/root/etf_monitor_system/
+
+# Copia file VPS → container
+docker cp /root/etf_monitor_system/<file> etf_monitor_system-app-1:/app/
+
+# Riavvia container (OBBLIGATORIO dopo docker cp su file .py)
+docker restart etf_monitor_system-app-1
+
+# Log live
+docker logs etf_monitor_system-app-1 --tail=30 -f
+
+# Trigger manuale monitor
+curl -X POST http://localhost:5001/api/trigger-update
+
+# Query DB
+docker exec etf_monitor_system-postgres-1 psql -U etfmonitor -d etfs -c "<SQL>"
+
+# Git pull VPS (il monitor modifica xlsx e dashboard.html → scartare prima)
+cd /root/etf_monitor_system && git checkout -- etf_monitoraggio.xlsx dashboard.html && git pull origin main
+```
 
 ### Caratteristiche ETF vs Fondi
-- ETF usa **Yahoo Finance OHLCV** (ticker formato Yahoo, es. `SWDA.L`, `ENRJ.MI`)
+- ETF usa **Yahoo Finance OHLCV** (ticker formato Yahoo, es. `SWDA.L`, `ENRJ.PA`)
 - Indicatori: EMA20, SMA50, SMA200, ADX14, RSI14
 - SMA200 come **filtro regime bear market** (se ETF sotto SMA200 → no nuovi ingressi L1)
-- 195 ETF analizzati
+- **214 ETF analizzati** (aggiornato 22/05/2026 — era 195; aggiunti 19 ETF per colmare gap di copertura)
 - Database: PostgreSQL in Docker (user: etfmonitor, db: etfs), tabelle: `etf_price_history`, `etf_l1_tracking`, `etf_l0_tracking`
+
+### Note ticker Yahoo Finance (ETF)
+- Molti ETF Amundi precedentemente su `.MI` (Borsa Italiana) non più indicizzati da Yahoo Finance
+- Migrati a `.L` (LSE), `.DE`/`.F` (XETRA), `.PA` (Euronext Paris), `.AS` (Amsterdam)
+- Per trovare ticker alternativo dato un ISIN: `https://query1.finance.yahoo.com/v1/finance/search?q={ISIN}`
+- **ISIN non recuperabile da yfinance** per ETF europei: `t.isin` restituisce `'-'`, OpenFIGI non funziona
+- Se ISIN è vuoto in Excel, il monitor usa il Ticker come identificatore di fallback nel DB
+- 13 ticker ancora irrisolti (probabili delistati) — vedi ISINs in `memory/project_ticker_issues.md`
+
+### Excel `etf_monitoraggio.xlsx` — colonne (foglio "ETF")
+| # | Nome | Tipo | Note |
+|---|------|------|------|
+| 1 | Livello | int | 0/1/2/3 — aggiornato automaticamente |
+| 2 | Ticker | str | Ticker Yahoo Finance (es. SWDA.L) |
+| 3 | Nome ETF | str | |
+| 4 | Categoria | str | Usata per asset_type |
+| 5 | Borsa | str | Londra / Francoforte / Parigi / Milano ecc. |
+| 6 | Valuta | str | USD / EUR / GBP |
+| 7 | Prezzo | float | Ultimo close |
+| 8 | EMA13 | float | Aggiornato dal monitor |
+| 9 | SMA50 | float | Aggiornato dal monitor |
+| 10 | RSI | float | Aggiornato dal monitor |
+| 11 | MACD Hist | float | Aggiornato dal monitor |
+| 12 | BB Width | float | Aggiornato dal monitor |
+| 13 | Segnale | str | L1/L2/L3/L0 WATCH ecc. |
+| 14 | Ultima Modifica | str | Timestamp |
+| 15 | ISIN | str | Codice ISIN (può essere vuoto — monitor usa Ticker come fallback) |
 
 ---
 
@@ -273,9 +325,13 @@ scheduler.py
 
 - `docker compose` (senza trattino) su Ubuntu 24.04
 - Per installare pacchetti Python globali: `pip3 install X --break-system-packages`
-- Il container **attivo** è `fund-monitor-app-1` (porta 5000) — NON usare `fund_monitor_system-app-1` (porta 5002, dati vecchi Feb 2026)
-- Dopo modifiche a Python: `docker cp file fund-monitor-app-1:/app/` + `docker restart fund-monitor-app-1`
+- Il container **attivo** Fondi è `fund-monitor-app-1` (porta 5000) — NON usare `fund_monitor_system-app-1` (porta 5002, dati vecchi Feb 2026)
+- Il container **attivo** ETF è `etf_monitor_system-app-1` (porta 5001)
+- **CRITICO — dopo `docker cp` su file `.py`: sempre `docker restart <container>`** — Python non ricarica moduli live, il vecchio codice rimane in memoria fino al riavvio
 - Cloudflare SSL deve essere **Full (strict)** — mai "Flexible"
 - DNS record A: `fondi` e `etf` → `76.13.37.133` (Proxied su Cloudflare)
 - Email: account Resend su `andreapavan67@gmail.com`, piano gratuito, sender `onboarding@resend.dev`
 - La memoria automatica di Claude è in `memory/MEMORY.md` (infrastruttura + preferenze)
+- **Git pull VPS su ETF**: il monitor modifica `etf_monitoraggio.xlsx` e `dashboard.html` in-place → `git checkout -- <file>` prima di `git pull`
+- **Git remote ETF**: `origin` = `git@github-pimpy67:pimpy67/etf-monitor-system.git`
+- **Git remote Fondi**: `origin` = `git@github-pimpy67:pimpy67/monitoraggio-fondi.git`
