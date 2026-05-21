@@ -422,7 +422,8 @@
     <div class="modal-overlay" id="switchModal" onclick="if(event.target===this)closeSwitchModal()">
         <div class="modal-box">
             <h3>&#8644; Switch Parziale</h3>
-            <div id="switchFundLabel" style="font-size:0.8em;color:#aaa;margin-bottom:14px;"></div>
+            <div id="switchFundLabel" style="font-size:0.8em;color:#aaa;margin-bottom:4px;"></div>
+            <div style="font-size:0.72em;color:#555;margin-bottom:14px;">Il NAV del fondo di partenza viene recuperato automaticamente dallo storico alla data indicata.</div>
             <input type="hidden" id="swIsin">
             <div class="modal-field">
                 <label>Data Switch</label>
@@ -437,12 +438,8 @@
                 <input type="text" id="swTargetIsin" placeholder="es. LU1234567890" style="font-family:monospace;font-size:0.82em;">
             </div>
             <div class="modal-field">
-                <label>NAV Fondo Destinazione <span style="color:#FFC000;">&#9654; quello che conosci</span></label>
+                <label>NAV Fondo Destinazione</label>
                 <input type="number" id="swTargetPrice" step="0.0001" min="0" placeholder="es. 12.3456">
-            </div>
-            <div class="modal-field">
-                <label>NAV Fondo Origine (opzionale — auto dal prezzo attuale)</label>
-                <input type="number" id="swPrice" step="0.0001" min="0" placeholder="lascia vuoto se non disponibile">
             </div>
             <div class="modal-field">
                 <label>Note (opzionale)</label>
@@ -1556,15 +1553,14 @@
             _switchIsin = isin;
             const p = (portfolioData || []).find(x => x.isin === isin) || {};
             document.getElementById('swIsin').value = isin;
-            document.getElementById('switchFundLabel').textContent = (p.fund_name || isin) + ' → ' + (p.entry_date || '');
+            document.getElementById('switchFundLabel').textContent = p.fund_name || isin;
             document.getElementById('swDate').value = new Date().toISOString().split('T')[0];
-            document.getElementById('swPrice').value = p.current_nav ? parseFloat(p.current_nav).toFixed(4) : '';
             document.getElementById('swTargetPrice').value = '';
             document.getElementById('swTargetName').value = '';
             document.getElementById('swTargetIsin').value = '';
             document.getElementById('swNotes').value = '';
             document.getElementById('switchModal').classList.add('open');
-            setTimeout(() => document.getElementById('swTargetName').focus(), 100);
+            setTimeout(() => document.getElementById('swDate').focus(), 100);
         }
         function closeSwitchModal() {
             document.getElementById('switchModal').classList.remove('open');
@@ -1573,7 +1569,6 @@
         async function submitSwitch() {
             const isin = document.getElementById('swIsin').value;
             const date = document.getElementById('swDate').value;
-            const sourcePrice = parseFloat(document.getElementById('swPrice').value);
             const targetPrice = parseFloat(document.getElementById('swTargetPrice').value);
             const targetName = document.getElementById('swTargetName').value.trim();
             const targetIsin = document.getElementById('swTargetIsin').value.trim();
@@ -1581,7 +1576,6 @@
             if (!date) { alert('Inserisci la data dello switch'); return; }
             const payload = {
                 event_date: date,
-                event_price: isNaN(sourcePrice) || sourcePrice <= 0 ? null : sourcePrice,
                 target_price: isNaN(targetPrice) || targetPrice <= 0 ? null : targetPrice,
                 target_fund_name: targetName || null,
                 target_isin: targetIsin || null,
@@ -1594,7 +1588,7 @@
                     body: JSON.stringify(payload)
                 });
                 let d = {};
-                try { d = await res.json(); } catch(e) { /* ignore parse error */ }
+                try { d = await res.json(); } catch(e) {}
                 if (res.ok) {
                     closeSwitchModal();
                     portfolioEventsCache = {};
