@@ -72,23 +72,13 @@
         /* Badge NUOVO (lampeggiante, solo gg 1-2) */
         @keyframes pulse-nuovo { 0%,100%{opacity:1} 50%{opacity:0.35} }
         .badge-nuovo { display:inline-block; background:#00B050; color:#fff; font-size:0.58em; font-weight:bold; padding:1px 5px; border-radius:3px; margin-left:5px; vertical-align:middle; animation:pulse-nuovo 1.1s ease-in-out infinite; letter-spacing:0.5px; }
+        .badge-exl1 { display:inline-block; background:rgba(248,81,73,0.15); color:#f87070; font-size:0.6em; font-weight:bold; padding:1px 5px; border-radius:3px; margin-left:4px; vertical-align:middle; border:1px solid rgba(248,81,73,0.3); white-space:nowrap; flex-shrink:0; }
         /* Badge "in procinto" per L2 con 5/6 condizioni (manca solo 1) */
         .badge-procinto { display:inline-block; font-size:0.62em; font-weight:bold; padding:1px 4px; border-radius:3px; margin-left:4px; vertical-align:middle; white-space:nowrap; }
         .badge-procinto.p5 { background:rgba(255,143,0,0.2); color:#FF9800; border:1px solid rgba(255,143,0,0.5); }
         .badge-procinto.p4 { background:rgba(255,192,0,0.15); color:#FFD030; border:1px solid rgba(255,192,0,0.4); }
         /* Icona avviso uscita L1 */
         .exit-warn { display:inline-block; font-size:0.72em; margin-left:4px; cursor:default; vertical-align:middle; }
-        /* Sezione usciti da L1 */
-        .l1-exits-section { margin-top:16px; background:rgba(220,53,69,0.04); border-radius:10px; border:1px solid rgba(220,53,69,0.18); overflow:hidden; }
-        .l1-exits-header { padding:10px 20px; background:rgba(220,53,69,0.07); display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
-        .l1-exits-header:hover { background:rgba(220,53,69,0.12); }
-        .l1-exits-header h3 { font-size:0.88em; color:#DC3545; font-weight:bold; margin:0; letter-spacing:0.5px; }
-        .l1-exits-body { padding:0 0 8px; }
-        .l1-exits-table { width:100%; border-collapse:collapse; font-size:0.82em; }
-        .l1-exits-table th { padding:7px 10px; text-align:left; color:#555; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.08); font-size:0.79em; background:rgba(10,15,30,0.5); white-space:nowrap; }
-        .l1-exits-table td { padding:7px 10px; border-bottom:1px solid rgba(255,255,255,0.04); color:#aaa; vertical-align:middle; }
-        .l1-exits-table tr:hover > td { background:rgba(255,255,255,0.02); }
-        .exit-rule-badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:0.75em; font-weight:bold; background:rgba(220,53,69,0.2); color:#FF6070; border:1px solid rgba(220,53,69,0.4); white-space:nowrap; }
         /* L1 table con thead visibile (colonne diverse da L2/L3) */
         .l1-table thead { display:table-header-group !important; background:rgba(10,15,30,0.7); border-bottom:1px solid rgba(255,255,255,0.1); }
         .l1-table thead th { padding:7px 8px; text-align:left; font-size:0.78em; font-weight:bold; color:#888; }
@@ -612,14 +602,14 @@
             <div class="level-header"><span>🟠 LIVELLO 0 — Deep Recovery</span><span id="l0Count">0 fondi</span></div>
             <table class="fund-table level-0-table" style="table-layout:fixed;width:100%;">
                 <colgroup>
-                    <col style="width:26%"><col style="width:10%"><col style="width:5%">
-                    <col style="width:8%"><col style="width:8%"><col style="width:8%">
-                    <col style="width:8%"><col style="width:6%"><col style="width:9%">
-                    <col style="width:12%">
+                    <col style="width:30%"><col style="width:5%">
+                    <col style="width:9%"><col style="width:9%"><col style="width:9%">
+                    <col style="width:9%"><col style="width:6%"><col style="width:10%">
+                    <col style="width:13%">
                 </colgroup>
                 <thead>
                     <tr>
-                        <th>Fondo</th><th>Casa</th><th>Giorni</th>
+                        <th>Fondo</th><th>Giorni</th>
                         <th>Entrata €</th><th>Stop Loss</th><th>Prezzo</th>
                         <th>Perf %</th><th>RSI</th><th>Dist. Picco</th>
                         <th>Entrato il</th>
@@ -677,32 +667,6 @@
                 </tr></thead>
                 <tbody id="level1Body"></tbody>
             </table>
-        </div>
-
-        <!-- Sezione usciti da L1 (ultimi 30 gg) -->
-        <div class="l1-exits-section" id="l1ExitsSection" style="display:none;">
-            <div class="l1-exits-header" onclick="toggleL1Exits()">
-                <h3>📤 Usciti da L1 — ultimi 30 giorni</h3>
-                <div style="display:flex;align-items:center;gap:12px;">
-                    <span id="l1ExitsCount" style="font-size:0.78em;color:#888;">0 uscite</span>
-                    <span id="l1ExitsToggle" style="color:#666;font-size:0.75em;">&#9660;</span>
-                </div>
-            </div>
-            <div id="l1ExitsBody" style="display:none;">
-                <table class="l1-exits-table">
-                    <thead><tr>
-                        <th style="width:27%">Fondo</th>
-                        <th style="width:9%">Entrato il</th>
-                        <th style="width:9%">Uscito il</th>
-                        <th style="width:6%">Gg L1</th>
-                        <th style="width:8%">NAV Ent.</th>
-                        <th style="width:8%">NAV Usc.</th>
-                        <th style="width:7%">Perf %</th>
-                        <th style="width:26%">Motivo uscita</th>
-                    </tr></thead>
-                    <tbody id="l1ExitsTableBody"></tbody>
-                </table>
-            </div>
         </div>
 
         <div class="level-section level-2">
@@ -994,7 +958,7 @@
         let historyCache = {};
         let l1TrackingMap = {};   // {isin: {entry_date, entry_price, days_in_l1, pct_gain, is_new}}
         let l1ExitsData = [];
-        let l1ExitsOpen = false;
+        let recentExitsMap = {};  // isin → {exit_date, days_ago}
 
         function tradingDays(fromDateStr, toDateStr) {
             const from = new Date(fromDateStr + 'T00:00:00');
@@ -1009,7 +973,7 @@
                 const [dashRes, l1TrackRes, l1ExitRes] = await Promise.all([
                     fetch('data/dashboard_data.json'),
                     fetch('/api/l1-tracking'),
-                    fetch('/api/l1-exits')
+                    fetch('/api/l1-exits?days=60')
                 ]);
                 allData = await dashRes.json();
                 const l1Track = await l1TrackRes.json();
@@ -1017,12 +981,26 @@
                 l1TrackingMap = {};
                 (l1Track.tracking || []).forEach(t => { l1TrackingMap[t.isin] = t; });
                 l1ExitsData = l1Exit.exits || [];
+                buildRecentExitsMap();
                 renderDashboard();
-                renderL1Exits();
             } catch (e) {
                 document.getElementById('lastUpdate').textContent = 'Errore caricamento dati';
                 console.error(e);
             }
+        }
+
+        function buildRecentExitsMap() {
+            recentExitsMap = {};
+            const today = new Date(); today.setHours(0,0,0,0);
+            l1ExitsData.forEach(ex => {
+                if (!ex.isin || !ex.exit_date) return;
+                const exitDate = ex.exit_date.substring(0,10);
+                const existing = recentExitsMap[ex.isin];
+                if (!existing || exitDate > existing.exit_date) {
+                    const daysAgo = Math.round((today - new Date(exitDate)) / (1000*60*60*24));
+                    recentExitsMap[ex.isin] = { exit_date: exitDate, days_ago: daysAgo };
+                }
+            });
         }
 
         function renderDashboard() {
@@ -1102,7 +1080,6 @@
                 const pfBtn0 = isin0 ? `<button class="btn-portfolio-add ${inPf0?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin0}')" title="${inPf0?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf0?'&#10003;':'+ Port.'}</button>` : '';
                 return `<tr style="cursor:pointer;" onclick="openFundDetail('${f.isin}')">
                     <td class="fund-name" title="${f.nome||f.isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || '-'}</span>${pfBtn0}</div><span class="fund-isin">${f.isin}</span></td>
-                    <td>${f.casa || '-'}</td>
                     <td style="text-align:center;color:#FF8F00;font-weight:bold;">${f.days_in_l0 || '-'}</td>
                     <td>${f.entry_price ? f.entry_price.toFixed(4) : '-'}</td>
                     <td style="${stopStyle}" title="Panic low — stop loss assoluto α">${f.panic_low ? f.panic_low.toFixed(4) : '-'}</td>
@@ -1208,7 +1185,7 @@
                 const pfBtn = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
 
                 return `<tr onclick="openFundDetail('${isin}')">
-                    <td class="fund-name" title="${f.nome||isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || isin}${nuovoBadge}${exitWarn}</span>${pfBtn}</div><span class="fund-isin">${isin}</span></td>
+                    <td class="fund-name" title="${f.nome||isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || isin}</span>${nuovoBadge}${exitWarn}${pfBtn}</div><span class="fund-isin">${isin}</span></td>
                     <td>${f.price ? f.price.toFixed(2) : '—'}</td>
                     ${fmtPct(f.pct_1d)}${fmtPct(f.pct_1w)}${fmtPct(f.pct_1m)}
                     <td style="text-align:center">${daysHtml}</td>
@@ -1218,44 +1195,6 @@
                     <td>${purityBadge}</td>
                 </tr>`;
             }).join('') || `<tr><td colspan="10" class="empty-msg">Nessun fondo in L1</td></tr>`;
-        }
-
-        // ── Render usciti da L1 ────────────────────────────────────────────────
-        function renderL1Exits() {
-            const section = document.getElementById('l1ExitsSection');
-            const countEl = document.getElementById('l1ExitsCount');
-            if (!l1ExitsData || l1ExitsData.length === 0) {
-                section.style.display = 'none';
-                return;
-            }
-            section.style.display = 'block';
-            countEl.textContent = `${l1ExitsData.length} uscit${l1ExitsData.length === 1 ? 'a' : 'e'}`;
-
-            const ruleNames = {1:'A — Stop Loss',2:'B — Trailing Stop',3:'C — Stanchezza RSI',4:'D — Strutturale MM',5:'E — ADX debole',6:'F — Storico insuff.'};
-            const tbody = document.getElementById('l1ExitsTableBody');
-            tbody.innerHTML = l1ExitsData.map(e => {
-                const perf = e.pct_gain;
-                const perfCls = perf > 0 ? '#00B050' : perf < 0 ? '#DC3545' : '#aaa';
-                const perfStr = perf != null ? `<span style="font-weight:bold;color:${perfCls}">${perf > 0 ? '+' : ''}${perf.toFixed(2)}%</span>` : '—';
-                const ruleName = ruleNames[e.exit_rule] || (e.exit_rule ? `Regola ${e.exit_rule}` : '—');
-                const trigger = e.exit_trigger ? `<span style="font-size:0.8em;color:#666;display:block;margin-top:2px;">${e.exit_trigger}</span>` : '';
-                return `<tr onclick="openFundDetail('${e.isin}')" style="cursor:pointer;">
-                    <td class="fund-name" title="${e.isin}">${e.fund_name}<span class="fund-isin">${e.isin}</span></td>
-                    <td style="color:#888;font-size:0.85em;">${e.entry_date || '—'}</td>
-                    <td style="color:#888;font-size:0.85em;">${e.exit_date}</td>
-                    <td style="text-align:center;color:#aaa;">${e.days_in_l1 ?? '—'}</td>
-                    <td style="font-family:monospace;font-size:0.85em;">${e.entry_price ? e.entry_price.toFixed(4) : '—'}</td>
-                    <td style="font-family:monospace;font-size:0.85em;">${e.exit_price ? e.exit_price.toFixed(4) : '—'}</td>
-                    <td style="text-align:center;">${perfStr}</td>
-                    <td><span class="exit-rule-badge">${ruleName}</span>${trigger}</td>
-                </tr>`;
-            }).join('');
-        }
-
-        function toggleL1Exits() {
-            l1ExitsOpen = !l1ExitsOpen;
-            document.getElementById('l1ExitsBody').style.display = l1ExitsOpen ? 'block' : 'none';
-            document.getElementById('l1ExitsToggle').innerHTML = l1ExitsOpen ? '&#9650;' : '&#9660;';
         }
 
         function renderLevel(level, funds) {
@@ -1305,6 +1244,8 @@
                 const isin = f.isin || '';
                 const inPf = portfolioIsins.has(isin);
                 const pfBtn = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
+                const exl1 = (level === 2 || level === 3) && recentExitsMap[isin]
+                    ? `<span class="badge-exl1">Ex-L1 ${recentExitsMap[isin].days_ago}gg</span>` : '';
                 // Purity badge
                 const sp = f.signal_purity;
                 const purityBadge = sp && sp.available
@@ -1315,7 +1256,7 @@
                 const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_pendenza_ok?'<span style="color:#0f0" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>':'<span style="color:#555" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>'}</span>`;
 
                 return `<tr onclick="openFundDetail('${isin}')">
-                    <td class="fund-name" title="${f.nome||isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || '—'}${assetTag}${procintoHtml}</span>${pfBtn}</div><span class="fund-isin">${isin}</span></td>
+                    <td class="fund-name" title="${f.nome||isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || '—'}</span>${assetTag}${procintoHtml}${exl1}${pfBtn}</div><span class="fund-isin">${isin}</span></td>
                     <td>${f.price ? f.price.toFixed(2) : '—'}</td>
                     ${fmtPct(f.pct_1d)}${fmtPct(f.pct_1w)}${fmtPct(f.pct_1m)}
                     ${distStr}

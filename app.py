@@ -730,7 +730,6 @@ def l1_tracking_api():
             pct_gain = round((current_nav - float(entry_price)) / float(entry_price) * 100, 2)
 
         entry_date_str = ed.isoformat()
-        delta_calendar = (today - ed).days
 
         result.append({
             'isin': isin,
@@ -740,7 +739,7 @@ def l1_tracking_api():
             'current_nav': current_nav,
             'pct_gain': pct_gain,
             'days_in_l1': days_in_l1,
-            'is_new': delta_calendar <= 1,   # badge NUOVO per giorni 1 e 2
+            'is_new': days_in_l1 <= 2,
         })
 
     return jsonify({'tracking': result})

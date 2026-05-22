@@ -689,10 +689,10 @@ class FundMonitor:
 
     def send_alerts(self, results: list):
         """
-        Invia alert giornalieri basati sul tracking L1.
-
-        - Email digest giornaliera con TUTTI i fondi in L1 (con prezzo entrata e % guadagno)
-        - Email individuale per ogni fondo che ESCE da L1 (con prezzo entrata/uscita e %)
+        Invia alert giornalieri basati sul tracking L1:
+        - send_new_entries: solo nuovi ingressi in L1 (o L0)
+        - send_l1_exit: ogni uscita da L1
+        - send_portfolio_signals: RSI > 72 o condizioni in deterioramento
         """
         from datetime import date as date_type
 
@@ -704,7 +704,8 @@ class FundMonitor:
 
         # Fondi con suggested_level == 1 oggi
         current_l1_isins = set()
-        l1_funds_data = []
+        new_l1_entries   = []   # solo nuovi ingressi oggi
+        portfolio_signals = []  # segnali operativi per fondi già in L1
 
         for r in results:
             suggested = r['analysis'].get('suggested_level', r['livello'])
@@ -721,35 +722,64 @@ class FundMonitor:
                 entry_date = today
                 entry_price = float(price) if price else None
                 add_log(f"  🟢 Nuovo L1: {r['nome'][:40]} — entrato oggi a €{entry_price:.4f}" if entry_price else f"  🟢 Nuovo L1: {r['nome'][:40]}")
+                lc = r['analysis'].get('level_conditions', {})
+                new_l1_entries.append({
+                    'isin':       isin,
+                    'nome':       r['nome'],
+                    'casa':       r['casa'],
+                    'categoria':  r['categoria'],
+                    'price':      float(price) if price else None,
+                    'rsi':        r['analysis'].get('rsi'),
+                    'adx':        lc.get('adx') or r['analysis'].get('adx'),
+                    'buy_count':  r['analysis'].get('buy_count', 0),
+                })
             else:
                 entry = existing_l1[isin]
                 entry_date = entry['entry_date']
                 entry_price = entry['entry_price']
 
-            # Calcola giorni in L1 (solo giorni di borsa, esclude weekend)
-            try:
-                import numpy as np
-                ed = entry_date if isinstance(entry_date, date_type) else datetime.fromisoformat(str(entry_date)).date()
-                days_in_l1 = max(1, int(np.busday_count(ed, today)) + 1)
-            except Exception:
-                days_in_l1 = 1
+                # Calcola giorni in L1 e performance per i segnali portafoglio
+                try:
+                    import numpy as np
+                    ed = entry_date if isinstance(entry_date, date_type) else datetime.fromisoformat(str(entry_date)).date()
+                    days_in_l1 = max(1, int(np.busday_count(ed, today)) + 1)
+                except Exception:
+                    days_in_l1 = 1
 
-            pct_gain = None
-            if price and entry_price:
-                pct_gain = round((float(price) - float(entry_price)) / float(entry_price) * 100, 2)
+                pct_gain = None
+                if price and entry_price:
+                    pct_gain = round((float(price) - float(entry_price)) / float(entry_price) * 100, 2)
 
-            l1_funds_data.append({
-                'isin': isin,
-                'nome': r['nome'],
-                'casa': r['casa'],
-                'categoria': r['categoria'],
-                'entry_date': entry_date,
-                'entry_price': entry_price,
-                'price': float(price) if price else None,
-                'days_in_l1': days_in_l1,
-                'pct_gain': pct_gain,
-                'level_conditions': r['analysis'].get('level_conditions', {}),
-            })
+                rsi = r['analysis'].get('rsi') or 0
+                bc  = r['analysis'].get('buy_count', 6)
+                lc  = r['analysis'].get('level_conditions', {})
+
+                signal_type   = None
+                signal_detail = None
+                if rsi >= 78:
+                    signal_type   = 'piede_dentro'
+                    signal_detail = f'RSI attuale: {rsi:.1f} (soglia Piede Dentro: 78)'
+                elif rsi >= 72:
+                    signal_type   = 'stanchezza'
+                    signal_detail = f'RSI attuale: {rsi:.1f} — zona di stanchezza in arrivo'
+                elif bc <= 4 and days_in_l1 > 5:
+                    signal_type   = 'attenzione'
+                    signal_detail = f'Condizioni soddisfatte: {bc}/6'
+
+                if signal_type:
+                    portfolio_signals.append({
+                        'isin':         isin,
+                        'nome':         r['nome'],
+                        'casa':         r['casa'],
+                        'categoria':    r['categoria'],
+                        'entry_date':   entry_date,
+                        'days_in_l1':   days_in_l1,
+                        'pct_gain':     pct_gain,
+                        'rsi':          rsi,
+                        'adx':          lc.get('adx') or r['analysis'].get('adx'),
+                        'signal_type':  signal_type,
+                        'signal_detail': signal_detail,
+                    })
 
         # Fondi che escono da L1
         for isin, entry in existing_l1.items():
@@ -795,7 +825,7 @@ class FundMonitor:
             rule_label   = f'[Regola {exit_rule}: {exit_trigger}]' if exit_rule else ''
             pct_str      = f'{pct_gain:+.2f}%' if pct_gain is not None else 'N/D'
             add_log(f"  🔴 Uscita L1: {fund_result['nome'][:40]} — {pct_str} {rule_label}")
-            self.alert_system.send_sell_l1_exit(sell_info)
+            self.alert_system.send_l1_exit(sell_info)
             self.db.save_l1_exit(
                 isin=isin,
                 fund_name=fund_result['nome'],
@@ -810,18 +840,14 @@ class FundMonitor:
             )
             self.db.remove_l1_entry(isin)
 
-        # Invia digest giornaliero L1
-        if l1_funds_data:
-            add_log(f"  📧 Invio digest L1: {len(l1_funds_data)} fondi in portafoglio")
-            self.alert_system.send_l1_digest(l1_funds_data)
-        else:
-            add_log("  ℹ️ Nessun fondo in L1 — digest non inviato")
+        # (invio email posticipato a dopo il loop L0 per combinare nuovi L0)
 
         # ── L0 "Deep Recovery" Tracking ──────────────────────────────────────
         existing_l0 = self.db.get_all_l0_entries()  # {isin: {entry_date, entry_price, panic_low}}
 
         current_l0_isins = set()
-        l0_funds_data = []
+        new_l0_entries   = []
+        l0_funds_data    = []
 
         for r in results:
             isin = r['isin']
@@ -923,22 +949,13 @@ class FundMonitor:
                 f"  🟠 Nuovo L0: {r['nome'][:40]} — "
                 f"€{float(current_price):.4f} · panic_low=€{float(panic_low):.4f}"
             )
-            l0_funds_data.append({
-                'isin': isin,
-                'nome': r['nome'],
-                'casa': r['casa'],
-                'categoria': r['categoria'],
-                'entry_date': today,
-                'entry_price': float(current_price),
-                'panic_low': float(panic_low),
-                'price': float(current_price),
-                'days_in_l0': 1,
-                'pct_gain': 0.0,
-                'level_conditions': {
-                    **l0,
-                    'mm20_current': r['analysis'].get('ma'),
-                    'rsi': r['analysis'].get('rsi'),
-                },
+            new_l0_entries.append({
+                'isin':       isin,
+                'nome':       r['nome'],
+                'price':      float(current_price),
+                'panic_low':  float(panic_low),
+                'rsi':        r['analysis'].get('rsi'),
+                'distance_from_peak': l0.get('distance_from_peak'),
             })
 
         # Fondi usciti dalla lista fondi (rimossi dall'Excel) ma ancora in L0 tracking
@@ -949,12 +966,18 @@ class FundMonitor:
             if not fund_result:
                 self.db.remove_l0_entry(isin)
 
-        # Invia digest giornaliero L0
-        if l0_funds_data:
-            add_log(f"  📧 Invio digest L0: {len(l0_funds_data)} fondi in recupero")
-            self.alert_system.send_l0_digest(l0_funds_data)
+        # ── Invio email ───────────────────────────────────────────────────────
+        if new_l1_entries or new_l0_entries:
+            add_log(f"  📧 Nuovi ingressi: L1={len(new_l1_entries)} L0={len(new_l0_entries)} — invio email")
+            self.alert_system.send_new_entries(new_l1_entries, new_l0_entries)
         else:
-            add_log("  ℹ️ Nessun fondo in L0 — digest non inviato")
+            add_log("  ℹ️ Nessun nuovo ingresso oggi")
+
+        if portfolio_signals:
+            add_log(f"  📧 Segnali portafoglio: {len(portfolio_signals)} — invio email")
+            self.alert_system.send_portfolio_signals(portfolio_signals)
+        else:
+            add_log("  ℹ️ Nessun segnale portafoglio oggi")
 
     def run(self, send_daily_report: bool = True):
         """
