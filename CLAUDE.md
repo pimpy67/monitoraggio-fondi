@@ -66,7 +66,7 @@ docker exec fund-monitor-postgres-1 psql -U fundmonitor -d funds -c "<SQL>"
 | `technical_analysis.py` | Indicatori tecnici, profili asset, logica L0/L1/L2/L3 |
 | `data_fetcher.py` | Fetch NAV da FT Markets (primario) e Yahoo Finance (backup) |
 | `database.py` | Wrapper PostgreSQL |
-| `scheduler.py` | Job scheduler — 18:00 lun-ven |
+| `scheduler.py` | Job scheduler — run principale 18:00 CEST + run silenzioso 09:00 CEST |
 | `dashboard.html` | Frontend SPA (HTML+JS, servito da Flask) |
 | `fondi_monitoraggio.xlsx` | Excel con tutti i fondi — fonte di verità per lista e livelli |
 | `backfill_historical.py` | Backfill storico da FT Markets (richiede 210gg, ottiene ~20-22gg reali) |
@@ -77,7 +77,10 @@ RESEND_API_KEY=...
 EMAIL_SENDER=onboarding@resend.dev
 EMAIL_RECIPIENT=andreapavan67@gmail.com
 DB_PASSWORD=FundMonitor2026!
-MONITOR_HOUR=18
+MONITOR_HOUR=16
+MONITOR_MINUTE=0
+MONITOR_HOUR_SOFT=7
+MONITOR_MINUTE_SOFT=0
 MONITOR_MINUTE=0
 MONITOR_DAYS=1-5
 RUN_ON_START=false
@@ -377,7 +380,7 @@ Se variazione giornaliera NAV ≤ −3%: nuovi ingressi L0 e L1 bloccati; uscite
 
 ---
 
-## Flusso Monitor Quotidiano (18:00 lun-ven)
+## Flusso Monitor Quotidiano (18:00 CEST run principale, 09:00 CEST run silenzioso)
 
 ```
 scheduler.py
