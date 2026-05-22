@@ -367,13 +367,14 @@ class FundMonitor:
             print(f"❌ Errore aggiornamento Excel: {e}")
             return []
     
-    def generate_dashboard_data(self, results: list) -> dict:
+    def generate_dashboard_data(self, results: list, send_daily_report: bool = True) -> dict:
         """
         Genera dati per la dashboard HTML
-        
+
         Args:
             results: Lista risultati analisi
-        
+            send_daily_report: Se True indica run completo con alert (usato dal fallback scheduler)
+
         Returns:
             Dizionario con dati dashboard
         """
@@ -383,7 +384,8 @@ class FundMonitor:
                 'total_funds': len(results),
                 'buy_signals': 0,
                 'sell_signals': 0,
-                'hold_signals': 0
+                'hold_signals': 0,
+                'alerts_sent': send_daily_report,
             },
             'levels': {
                 1: [],
@@ -440,7 +442,7 @@ class FundMonitor:
                     'distance_ok': bool(r['analysis'].get('level_conditions', {}).get('distance_ok', False)),
                     'adx_ok': bool(r['analysis'].get('level_conditions', {}).get('adx_ok', False)),
                     'adx_entry_ok': bool(r['analysis'].get('level_conditions', {}).get('adx_entry_ok', False)),
-                    'nav_momentum_ok': bool(r['analysis'].get('level_conditions', {}).get('nav_momentum_ok', False)),
+                    'nav_pendenza_ok': bool(r['analysis'].get('level_conditions', {}).get('nav_pendenza_ok', False)),
                 },
                 'signal_purity': r.get('signal_purity', {'available': False, 'reason': 'N/D'}),
             }
@@ -516,6 +518,13 @@ class FundMonitor:
         except Exception as e:
             dashboard_data['l0_funds'] = []
             print(f"Errore caricamento L0 per dashboard: {e}")
+
+        # Data freshness: data più recente presente nel DB
+        try:
+            stats = self.db.get_stats()
+            dashboard_data['summary']['data_as_of'] = stats.get('last_date')
+        except Exception:
+            dashboard_data['summary']['data_as_of'] = None
 
         with open('data/dashboard_data.json', 'w') as f:
             json.dump(dashboard_data, f, indent=2, cls=SafeEncoder)
@@ -1079,7 +1088,7 @@ class FundMonitor:
         try:
             add_log(f"Step 4: Generazione dashboard con {len(results)} risultati...")
             os.makedirs('data', exist_ok=True)
-            dashboard_data = self.generate_dashboard_data(results)
+            dashboard_data = self.generate_dashboard_data(results, send_daily_report=send_daily_report)
             total = dashboard_data.get('summary', {}).get('total_funds', '?')
             add_log(f"Step 4: Dashboard generata OK - {total} fondi")
         except Exception as e:
@@ -1107,12 +1116,12 @@ class FundMonitor:
                         'buy_count': int(r['analysis'].get('buy_count', 0)),
                         'asset_type': r['analysis'].get('asset_type', 'equity_developed'),
                         'conditions': {
-                            'trend_ok': bool(r['analysis'].get('level_conditions', {}).get('trend_ok', False)),
+                            'allineamento_ok': bool(r['analysis'].get('level_conditions', {}).get('allineamento_ok', False)),
+                            'persistenza_ok': bool(r['analysis'].get('level_conditions', {}).get('persistenza_ok', False)),
                             'rsi_optimal': bool(r['analysis'].get('level_conditions', {}).get('rsi_optimal', False)),
-                            'nav_above_bb': bool(r['analysis'].get('level_conditions', {}).get('nav_above_upper_bb', False)),
-                            'nav_rising': bool(r['analysis'].get('level_conditions', {}).get('nav_rising', False)),
-                            'nav_rising_original': bool(r['analysis'].get('level_conditions', {}).get('nav_rising_original', False)),
-                            'nav_rising_alt': bool(r['analysis'].get('level_conditions', {}).get('nav_rising_alt', False)),
+                            'distance_ok': bool(r['analysis'].get('level_conditions', {}).get('distance_ok', False)),
+                            'adx_entry_ok': bool(r['analysis'].get('level_conditions', {}).get('adx_entry_ok', False)),
+                            'nav_pendenza_ok': bool(r['analysis'].get('level_conditions', {}).get('nav_pendenza_ok', False)),
                         }
                     }
                     dashboard_data['levels'][r['livello']].append(fund_data)
@@ -1122,22 +1131,25 @@ class FundMonitor:
                 json.dump(dashboard_data, f, indent=2)
             add_log(f"Step 4: Dashboard fallback salvata con {len(results)} fondi")
 
-        # 5. Invia alert
-        try:
-            add_log("Step 5: Invio alert...")
-            self.send_alerts(results)
-            add_log("Step 5: Alert OK")
-        except Exception as e:
-            add_log(f"Step 5 ERRORE Alert: {e}")
-
-        # 6. Health report via email (solo in caso di errori)
-        if hasattr(self, '_health_report'):
+        # 5. Invia alert (solo se send_daily_report=True — run completo)
+        if send_daily_report:
             try:
-                add_log("Step 6: Invio health report...")
-                self.alert_system.send_health_report(self._health_report)
-                add_log("Step 6: Health report OK")
+                add_log("Step 5: Invio alert...")
+                self.send_alerts(results)
+                add_log("Step 5: Alert OK")
             except Exception as e:
-                add_log(f"Step 6 ERRORE Health report: {e}")
+                add_log(f"Step 5 ERRORE Alert: {e}")
+
+            # 6. Health report via email (solo in caso di errori)
+            if hasattr(self, '_health_report'):
+                try:
+                    add_log("Step 6: Invio health report...")
+                    self.alert_system.send_health_report(self._health_report)
+                    add_log("Step 6: Health report OK")
+                except Exception as e:
+                    add_log(f"Step 6 ERRORE Health report: {e}")
+        else:
+            add_log("Step 5: Alert saltati (refresh mattutino silenzioso)")
 
         add_log(f"Monitoraggio completato - {datetime.now().strftime('%H:%M')}")
         add_log("="*50)

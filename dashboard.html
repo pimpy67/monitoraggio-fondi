@@ -363,6 +363,7 @@
                 <span id="healthLabel">Verifica...</span>
             </div>
             <div class="last-update" id="lastUpdate">Caricamento...</div>
+            <div class="last-update" id="dataAsOf" style="color:#f90;font-weight:600;margin-left:12px;display:none" title="Data dell'ultimo NAV disponibile nel database"></div>
         </div>
     </div>
 
@@ -1008,6 +1009,20 @@
 
             const dt = new Date(allData.last_update);
             document.getElementById('lastUpdate').textContent = `Ultimo aggiornamento: ${dt.toLocaleString('it-IT')}`;
+
+            // Data dell'ultimo NAV disponibile
+            const dataAsOf = allData.summary && allData.summary.data_as_of;
+            const asOfEl = document.getElementById('dataAsOf');
+            if (dataAsOf) {
+                const d = new Date(dataAsOf + 'T00:00:00');
+                const ieri = new Date(); ieri.setDate(ieri.getDate() - 1);
+                const isStale = d < ieri && d.toDateString() !== ieri.toDateString();
+                asOfEl.textContent = `NAV al: ${d.toLocaleDateString('it-IT')}${isStale ? ' ⚠️ dati vecchi' : ''}`;
+                asOfEl.style.color = isStale ? '#f44' : '#f90';
+                asOfEl.style.display = '';
+            } else {
+                asOfEl.style.display = 'none';
+            }
 
             document.getElementById('totalFunds').textContent = allData.summary.total_funds;
             document.getElementById('buySignals').textContent = allData.summary.buy_signals;
