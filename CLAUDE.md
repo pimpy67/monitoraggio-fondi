@@ -164,6 +164,113 @@ cd /root/etf_monitor_system && git checkout -- etf_monitoraggio.xlsx dashboard.h
 
 ---
 
+## Schema Livelli ETF (L0 / L1 / L2 / L3) — Parametri Definitivi (22/05/2026)
+
+> Questi parametri sono la versione definitiva concordata e implementata nel codice. La dashboard deve rispecchiare esattamente questi valori.
+
+### L3 — Universe (monitoraggio passivo)
+Tutti gli ETF partono da qui. Nessuna condizione richiesta.
+
+### L2 — Watchlist
+- Prezzo sopra EMA20 da ≥ 3 giorni consecutivi
+- OPPURE: EMA20 > SMA50 (allineamento parziale)
+
+### L1 — Core Portfolio ("Trend Sicuro") — 6 condizioni TUTTE obbligatorie
+
+| # | Condizione | Logica |
+|---|-----------|--------|
+| 1 | **Allineamento** | price > EMA20 > SMA50 (+ price > SMA200 se mm200_filter=True per asset class) |
+| 2 | **Persistenza** | days_above_EMA20 ≥ 3 AND slope(EMA20) > 0 |
+| 3 | **RSI ottimale** | rsi_entry_low ≤ RSI ≤ rsi_entry_high (vedi profili sotto) |
+| 4 | **Distanza EMA20** | 0% ≤ dist_EMA20 ≤ dist_max (non troppo esteso) |
+| 5 | **ADX** | ADX ≥ adx_entry (forza trend, vedi profili sotto) |
+| 6 | **MACD momentum** | macd_h > 0 AND (macd_h > macd_h_prev OR dist_EMA20 < 2.0%) |
+
+> **Condizione 6 (MACD)**: blocca ingressi quando EMA20 è ancora positiva per inerzia ma il momentum è già esaurito. Il secondo ramo (dist < 2%) cattura i buy-the-dip vicini all'EMA20 anche con MACD in leggero plateau.
+
+> **Blocco ingresso L1**: Kill Switch attivo (calo giornaliero ≤ −3%) → ingresso bloccato anche se tutte le 6 condizioni sono vere.
+
+### Profili parametri per asset type (ETF)
+
+| Parametro | equity_developed | equity_sector | equity_emerging | commodity | bond | thematic |
+|-----------|:---:|:---:|:---:|:---:|:---:|:---:|
+| RSI entry range | 50–70 | 50–70 | 50–65 | 50–65 | 48–62 | 50–70 |
+| Distanza max EMA20 | 4% | 5% | 5% | 5% | 2% | 6% |
+| ADX entrata (min) | 20 | 22 | 20 | 22 | 15 | 22 |
+| Giorni sopra EMA20 | 3 | 3 | 3 | 3 | 3 | 3 |
+| SMA200 filter | True | True | True | **True** | False | True |
+| l0_drawdown | 15% | 18% | 20% | 20% | 8% | 20% |
+| l0_rsi_max | 35 | 38 | 38 | 40 | 38 | 40 |
+
+### Uscita L1 — 6 Regole (in ordine di priorità)
+
+| Priorità | Regola | Trigger | Tipo uscita | Asset class |
+|:---:|--------|---------|:-----------:|-------------|
+| 1 | **F — Kill Switch** | Calo giornaliero ≤ −3% | Totale | Tutte |
+| 2 | **A — Stop Loss** | Prezzo sotto EMA20 da ≥ **3 giorni** consecutivi | Totale | Tutte |
+| 3 | **B — Trailing Stop** | **EMA10 < EMA20** | Totale | Tutte |
+| 4 | **C — Stanchezza** | RSI_prev ≥ 70 AND RSI_oggi < 70 | Totale | Non-bond |
+| 5 | **E — ADX debole** | ADX < **18** AND prezzo < EMA20 | Totale | Equity/Commodity |
+| 6 | **D — Uscita Parziale** | RSI > 78 | **Parziale 90%** | Equity/Commodity |
+
+**Note importanti sulle regole:**
+- **Regola A**: 3 giorni di tolleranza evitano uscite su falsi segnali da singolo giorno di panico
+- **Regola B**: EMA10 < EMA20 è il trailing reattivo — molto più rapido del vecchio EMA20 < SMA50 (death cross tardivo)
+- **Regola C**: solo per non-bond (i bond raramente toccano RSI 70); per bond si usa RSI < rsi_exit_min
+- **Regola E**: condizione congiunta price < EMA20 evita uscite su consolidamenti laterali con ADX naturalmente basso
+- **Regola D**: NON è uscita totale — attiva la logica "piede dentro"
+
+### Logica "Piede Dentro" — 90% / 10%
+
+```
+Segnale D (RSI > 78):
+  → USCITA PARZIALE: vendi 90% della posizione
+  → Acquista ETF monetario (XEON — EUR Overnight €STR) con il 90%
+  → Mantieni 10% ETF equity: rimane in L1, tracciato dalla dashboard
+
+Segnale F / A / B / C / E:
+  → USCITA TOTALE: vendi il 10% rimanente
+  → Mantieni XEON fino al prossimo segnale di rientro
+
+Rientro L1 (tutte 6 condizioni vere):
+  → Vendi XEON → rientra 100% su ETF equity
+  → Il 10% già presente non richiede riacquisto
+```
+
+**Vantaggi operativi:**
+- Il 90% in XEON guadagna ~3–4% annuo (€STR) mentre si aspetta il rientro
+- Il 10% rimasto è il "sensore": se il trend riprende si vede subito senza costi di riacquisto
+- Tassazione solo sulla parte venduta (90%)
+- Dashboard continua a tracciare l'ETF con dati reali anche durante la fase monetaria
+
+### L0 — Deep Recovery (ETF in forte calo)
+
+**Entrata** — 4 condizioni tutte obbligatorie:
+1. Prezzo almeno `l0_drawdown`% sotto il picco storico (vedi profili: 8–20% per asset class)
+2. RSI < `l0_rsi_max` (ipervenduto, vedi profili)
+3. Divergenza rialzista (prezzo fa minimo più basso, RSI fa minimo più alto)
+4. Segnale recupero: RSI risalito > 32 OPPURE micro-breakout ≥ 0.3% su 5gg
+
+**Uscita L0** — basta 1:
+- γ: Prezzo > EMA20 → promozione a L2
+- β: RSI < 25 dopo ingresso → trappola ribassista
+- α: Prezzo < panic_low (min 30gg al momento ingresso) → stop assoluto
+- ε: Nessun recupero dopo 30gg → gestito in monitor.py
+
+### Kill Switch ETF
+Se variazione giornaliera ≤ −3%: nuovi ingressi L0 e L1 bloccati; uscite sempre operative.
+
+### Indicatori calcolati (ETF)
+- **EMA10** (period=10) — usato per exit rule B (trailing stop)
+- **EMA20** (period=20) — media veloce, segnale principale
+- **SMA50** (period=50) — media media, filtro allineamento
+- **SMA200** (period=200) — filtro regime bear market
+- **RSI14** — momentum oscillatore
+- **ADX14** (da dati OHLCV reali) — forza direzionale
+- **MACD** (12,26,9) — momentum condizione 6 entrata
+
+---
+
 ## Schema Livelli Fondi (L0 / L1 / L2 / L3)
 
 ### L3 — Universe (monitoraggio passivo)
