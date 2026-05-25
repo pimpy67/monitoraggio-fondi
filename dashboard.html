@@ -2052,9 +2052,11 @@
             const distColor = (c.dist_mm20||0) >= 0 ? '#00B050' : '#DC3545';
             const lvMap = {1:'#00B050', 2:'#FFC000', 3:'#4472C4', 0:'#FF8F00'};
             const lvColor = lvMap[data.level] || '#888';
+            const navDateFmt = c.nav_date ? c.nav_date.substring(0,10).split('-').reverse().join('/') : null;
+            const navDateLabel = navDateFmt ? `<div style="font-size:0.65em;color:#555;margin-top:2px;">al ${navDateFmt}</div>` : '';
             document.getElementById('detailKpis').innerHTML = `
                 <div class="kpi-box"><div class="kpi-label">Livello</div><div class="kpi-value" style="color:${lvColor}">L${data.level ?? '?'}</div></div>
-                <div class="kpi-box"><div class="kpi-label">NAV</div><div class="kpi-value">${c.nav != null ? c.nav.toFixed(4) : '—'}</div></div>
+                <div class="kpi-box"><div class="kpi-label">NAV</div><div class="kpi-value">${c.nav != null ? c.nav.toFixed(4) : '—'}</div>${navDateLabel}</div>
                 <div class="kpi-box"><div class="kpi-label">RSI 14</div><div class="kpi-value" style="color:${rsiColor}">${c.rsi14 != null ? c.rsi14.toFixed(0) : '—'}</div></div>
                 <div class="kpi-box"><div class="kpi-label">ADX 14</div><div class="kpi-value">${c.adx != null ? c.adx.toFixed(0) : '—'}</div></div>
                 <div class="kpi-box"><div class="kpi-label">MM20</div><div class="kpi-value">${c.mm20 != null ? c.mm20.toFixed(4) : '—'}</div></div>
@@ -2376,7 +2378,9 @@
             const sv = s.short?.verdict, mv = s.mid?.verdict, lv_v = s.long?.verdict;
             const fp = (v, d=1) => v != null ? (v > 0 ? '+' : '') + v.toFixed(d) + '%' : '—';
 
-            let html = `<div class="nar-title">📋 Analisi Completa — ${fname}</div>`;
+            const navDateFmt = c.nav_date ? c.nav_date.substring(0,10).split('-').reverse().join('/') : null;
+            const navDateTag = navDateFmt ? `<span style="font-size:0.72em;color:#555;margin-left:8px;">dati al ${navDateFmt}</span>` : '';
+            let html = `<div class="nar-title">📋 Analisi Completa — ${fname}${navDateTag}</div>`;
 
             // Posizione tecnica
             const distDesc = (c.dist_mm20 || 0) >= 0

@@ -934,6 +934,7 @@ def fund_detail(isin):
 
     # ── Sentiment ─────────────────────────────────────────────────────────────
     last = history[-1] if history else {}
+    last_nav_date = last.get('date')   # data reale dell'ultimo NAV disponibile (es. 2026-05-23)
     rsi   = last.get('rsi14') or 50.0
     adx_v = last.get('adx')   or 0.0
     mh    = last.get('macd_hist') or 0.0
@@ -1007,7 +1008,9 @@ def fund_detail(isin):
             pnl_pct = round((nav_curr - ep) / ep * 100, 2) if ep > 0 else 0.0
             try:
                 entry_dt = datetime.strptime(ed_str, '%Y-%m-%d').date()
-                days_held = (date_type.today() - entry_dt).days
+                # Usa data ultimo NAV reale, non today() (evita conteggio errato nei weekend)
+                ref_date = date_type.fromisoformat(last_nav_date) if last_nav_date else date_type.today()
+                days_held = (ref_date - entry_dt).days
             except Exception:
                 days_held = 0
 
@@ -1123,14 +1126,15 @@ def fund_detail(isin):
         'count':        len(history),
         'dist_52w':     dist_52w,
         'current': {
-            'nav':       fmt(nav_v, 4),
-            'rsi14':     fmt(rsi, 1),
-            'adx':       fmt(adx_v, 1),
-            'mm20':      fmt(mm20_v, 4),
-            'mm50':      fmt(mm50_v, 4) if mm50_v else None,
-            'dist_mm20': fmt(dist, 1),
-            'macd_hist': fmt(mh, 4),
-            'dist_52w':  dist_52w,
+            'nav':          fmt(nav_v, 4),
+            'nav_date':     last_nav_date,
+            'rsi14':        fmt(rsi, 1),
+            'adx':          fmt(adx_v, 1),
+            'mm20':         fmt(mm20_v, 4),
+            'mm50':         fmt(mm50_v, 4) if mm50_v else None,
+            'dist_mm20':    fmt(dist, 1),
+            'macd_hist':    fmt(mh, 4),
+            'dist_52w':     dist_52w,
         },
         'sentiment': {
             'short': {'verdict': sv, 'score': ss, 'label': 'Breve termine (1–2 sett.)', 'factors': sf, 'color': vcolor(sv)},
