@@ -47,12 +47,27 @@ def _get_last_update():
 def _should_run_today():
     """Controlla se il monitoraggio deve girare oggi.
     Ritorna True se:
+    - Oggi è un giorno lavorativo secondo MONITOR_DAYS, oppure
     - Non ha mai girato, oppure
     - L'ultimo aggiornamento non e' di oggi E siamo dopo l'orario programmato
     - Il file esiste ma ha 0 fondi (file iniziale vuoto creato al deploy)
     """
     now = datetime.now()
     monitor_hour = int(os.environ.get('MONITOR_HOUR', 18))
+
+    # Controlla se oggi è un giorno previsto da MONITOR_DAYS (default lun-ven)
+    monitor_days_str = os.environ.get('MONITOR_DAYS', '1-5')
+    today_isoweekday = now.isoweekday()  # 1=lun, 7=dom
+    try:
+        if '-' in monitor_days_str:
+            start, end = monitor_days_str.split('-')
+            is_work_day = int(start) <= today_isoweekday <= int(end)
+        else:
+            is_work_day = today_isoweekday in [int(d) for d in monitor_days_str.split(',')]
+    except Exception:
+        is_work_day = today_isoweekday <= 5
+    if not is_work_day:
+        return False
 
     try:
         with open('data/dashboard_data.json', 'r') as f:
