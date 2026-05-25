@@ -1,17 +1,35 @@
 #!/bin/bash
-# Aggiorna l'Excel dei fondi sul server
-# Esegui questo script ogni volta che modifichi fondi_monitoraggio.xlsx
+# Pubblica fondi_monitoraggio.xlsx su GitHub e aggiorna il VPS via git pull.
+# Esegui questo script ogni volta che modifichi l'Excel (aggiungi/rimuovi fondi, cambia categorie).
+# Funziona da qualsiasi PC che abbia git e accesso SSH al VPS.
 
-EXCEL_MAC="/Users/user/Documents/CORSO_ITS/APPLICAZIONI _ APP/MONITORAGGIO FONDI/fondi_monitoraggio.xlsx"
-EXCEL_VPS="root@76.13.37.133:/opt/fund-monitor-src/fondi_monitoraggio.xlsx"
+VPS="root@76.13.37.133"
+VPS_REPO="/root/fund_monitor_system"
 
-echo "Caricamento Excel sul server..."
-scp "$EXCEL_MAC" "$EXCEL_VPS"
-
-if [ $? -eq 0 ]; then
-    echo "Fatto! I fondi aggiornati saranno monitorati dal prossimo run del monitor."
-    echo "Puoi triggerare un aggiornamento manuale con:"
-    echo "  curl -X POST http://localhost:5000/api/trigger-update"
+# 1. Commit e push dell'Excel su GitHub
+echo "=== Push Excel su GitHub ==="
+git add fondi_monitoraggio.xlsx
+if git diff --cached --quiet; then
+    echo "Nessuna modifica all'Excel — già aggiornato su GitHub."
 else
-    echo "ERRORE: caricamento fallito. Verifica la connessione VPN/SSH."
+    git commit -m "Aggiorna fondi_monitoraggio.xlsx"
+    git push origin main
+    if [ $? -ne 0 ]; then
+        echo "ERRORE: push GitHub fallito. Verifica la connessione."
+        exit 1
+    fi
 fi
+
+# 2. VPS: scarta le modifiche del monitor (Livello/Prezzo/RSI) e scarica l'ultimo Excel da GitHub
+echo ""
+echo "=== Aggiornamento VPS ==="
+ssh "$VPS" "cd $VPS_REPO && git checkout -- fondi_monitoraggio.xlsx && git pull origin main"
+if [ $? -ne 0 ]; then
+    echo "ERRORE: git pull sul VPS fallito. Verifica la connessione SSH."
+    exit 1
+fi
+
+echo ""
+echo "Fatto! Il container legge l'Excel aggiornato al prossimo run del monitor."
+echo "Per un aggiornamento immediato:"
+echo "  ssh $VPS 'curl -s -X POST http://localhost:5000/api/trigger-update'"
