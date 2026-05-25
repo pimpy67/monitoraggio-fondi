@@ -20,12 +20,15 @@ Documento di riferimento tecnico per il progetto. Caricato automaticamente a ogn
 ### Percorsi
 | Risorsa | Percorso |
 |---------|----------|
-| Sorgente codice (Mac) | `/Users/user/Documents/CORSO_ITS/APPLICAZIONI _ APP/MONITORAGGIO FONDI/fund_monitor_system/` |
-| Sorgente codice (VPS) | `/root/fund_monitor_system/` |
-| Container **attivo** | `fund-monitor-app-1` → porta **5000** |
-| Container secondario | `fund_monitor_system-app-1` → porta 5002 (dati vecchi, NON usato) |
+| Sorgente codice (locale) | `C:\Users\andrea.pavan_allievi\Documents\monitoraggio-fondi\` (Windows scuola) |
+| Sorgente codice (Mac casa) | `/Users/user/Documents/CORSO_ITS/APPLICAZIONI _ APP/MONITORAGGIO FONDI/fund_monitor_system/` |
+| Git repo VPS | `/root/fund_monitor_system/` → remote `https://github.com/pimpy67/monitoraggio-fondi.git` |
+| **Deploy dir VPS** | `/opt/fund-monitor-src/` — qui vive `docker-compose.yml` del container attivo |
+| Container **attivo** | `fund-monitor-app-1` → porta **5000** — progetto Docker: `fund-monitor` |
+| Container secondario | `fund_monitor_system-app-1` → porta 5002 (dati vecchi Feb 2026, NON usato) |
 | Nginx config | `/etc/nginx/sites-enabled/fondi` → proxy a **porta 5000** (non cambiare) |
 | Dashboard | `https://fondi.andreapavan.tech` |
+| Excel (volume mount) | `/root/fund_monitor_system/fondi_monitoraggio.xlsx` → montato in `/app/fondi_monitoraggio.xlsx` |
 
 ### Database PostgreSQL
 - Container: `fund-monitor-postgres-1`
@@ -37,17 +40,53 @@ Documento di riferimento tecnico per il progetto. Caricato automaticamente a ogn
   - `l1_exit_history` — storico uscite L1 (exit_date, exit_rule, entry_date, pct_gain)
   - `portfolio_entries` — portafoglio personale (isin, entry_date, entry_price, fund_name)
 
+### Deploy procedure (da Claude Code o terminale locale)
+
+> **Regola critica**: `--force-recreate` ricostruisce il container dall'immagine originale → cancella tutti i file copiati con `docker cp`. Dopo ogni `--force-recreate` occorre sempre rifare i `docker cp`.
+
+**Caso A — modifiche solo a file .py / .html (deploy normale):**
+```bash
+# 1. Copia i file modificati nella deploy dir del VPS
+scp dashboard.html monitor.py scheduler.py alerts.py app.py root@76.13.37.133:/opt/fund-monitor-src/
+
+# 2. Copia nel container e riavvia
+ssh root@76.13.37.133 "
+  cd /opt/fund-monitor-src
+  docker cp dashboard.html fund-monitor-app-1:/app/dashboard.html
+  docker cp monitor.py fund-monitor-app-1:/app/monitor.py
+  docker cp scheduler.py fund-monitor-app-1:/app/scheduler.py
+  docker cp alerts.py fund-monitor-app-1:/app/alerts.py
+  docker cp app.py fund-monitor-app-1:/app/app.py
+  docker restart fund-monitor-app-1
+"
+```
+
+**Caso B — modifiche a `docker-compose.yml` (volume mount, porte, env var):**
+```bash
+# 1. Copia docker-compose.yml + tutti i file .py/.html
+scp docker-compose.yml dashboard.html monitor.py scheduler.py alerts.py app.py root@76.13.37.133:/opt/fund-monitor-src/
+
+# 2. Ricrea il container con nome progetto corretto, POI ricopia i file (force-recreate li cancella!)
+ssh root@76.13.37.133 "
+  cd /opt/fund-monitor-src
+  docker compose -p fund-monitor up -d --force-recreate app
+  docker cp dashboard.html fund-monitor-app-1:/app/dashboard.html
+  docker cp monitor.py fund-monitor-app-1:/app/monitor.py
+  docker cp scheduler.py fund-monitor-app-1:/app/scheduler.py
+  docker cp alerts.py fund-monitor-app-1:/app/alerts.py
+  docker cp app.py fund-monitor-app-1:/app/app.py
+  docker restart fund-monitor-app-1
+"
+```
+
+**Aggiornare l'Excel (aggiungere/rimuovere fondi):**
+```bash
+# Da qualsiasi PC con git + SSH: commit su GitHub + git pull sul VPS
+./aggiorna_excel_fondi.sh
+```
+
 ### Comandi rapidi
 ```bash
-# Copia file Mac → VPS
-scp "/Users/user/Documents/CORSO_ITS/APPLICAZIONI _ APP/MONITORAGGIO FONDI/fund_monitor_system/<file>" root@76.13.37.133:/root/fund_monitor_system/
-
-# Copia file VPS → container attivo
-docker cp /root/fund_monitor_system/<file> fund-monitor-app-1:/app/
-
-# Riavvia container
-docker restart fund-monitor-app-1
-
 # Log live
 docker logs fund-monitor-app-1 --tail=30 -f
 
