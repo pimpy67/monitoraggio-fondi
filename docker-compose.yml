@@ -17,6 +17,7 @@ services:
       PYTHONUNBUFFERED: "1"
     volumes:
       - fund_data:/app/data
+      - /opt/fund-monitor-src/fondi_monitoraggio.xlsx:/app/fondi_monitoraggio.xlsx
     depends_on:
       postgres:
         condition: service_healthy
