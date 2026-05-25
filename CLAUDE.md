@@ -22,10 +22,8 @@ Documento di riferimento tecnico per il progetto. Caricato automaticamente a ogn
 |---------|----------|
 | Sorgente codice (locale) | `C:\Users\andrea.pavan_allievi\Documents\monitoraggio-fondi\` (Windows scuola) |
 | Sorgente codice (Mac casa) | `/Users/user/Documents/CORSO_ITS/APPLICAZIONI _ APP/MONITORAGGIO FONDI/fund_monitor_system/` |
-| Git repo VPS | `/root/fund_monitor_system/` → remote `https://github.com/pimpy67/monitoraggio-fondi.git` |
-| **Deploy dir VPS** | `/opt/fund-monitor-src/` — qui vive `docker-compose.yml` del container attivo |
+| **Git repo VPS = Deploy dir** | `/root/fund_monitor_system/` → remote `https://github.com/pimpy67/monitoraggio-fondi.git` |
 | Container **attivo** | `fund-monitor-app-1` → porta **5000** — progetto Docker: `fund-monitor` |
-| Container secondario | `fund_monitor_system-app-1` → porta 5002 (dati vecchi Feb 2026, NON usato) |
 | Nginx config | `/etc/nginx/sites-enabled/fondi` → proxy a **porta 5000** (non cambiare) |
 | Dashboard | `https://fondi.andreapavan.tech` |
 | Excel (volume mount) | `/root/fund_monitor_system/fondi_monitoraggio.xlsx` → montato in `/app/fondi_monitoraggio.xlsx` |
@@ -40,63 +38,35 @@ Documento di riferimento tecnico per il progetto. Caricato automaticamente a ogn
   - `l1_exit_history` — storico uscite L1 (exit_date, exit_rule, entry_date, pct_gain)
   - `portfolio_entries` — portafoglio personale (isin, entry_date, entry_price, fund_name)
 
-### Deploy procedure (da Claude Code o terminale locale)
+### Deploy — unico script
 
-> **Regola critica**: `--force-recreate` ricostruisce il container dall'immagine originale → cancella tutti i file copiati con `docker cp`. Dopo ogni `--force-recreate` occorre sempre rifare i `docker cp`.
-
-**Caso A — modifiche solo a file .py / .html (deploy normale):**
 ```bash
-# 1. Copia i file modificati nella deploy dir del VPS
-scp dashboard.html monitor.py scheduler.py alerts.py app.py database.py root@76.13.37.133:/opt/fund-monitor-src/
-
-# 2. Copia nel container e riavvia
-ssh root@76.13.37.133 "
-  cd /opt/fund-monitor-src
-  docker cp dashboard.html fund-monitor-app-1:/app/dashboard.html
-  docker cp monitor.py fund-monitor-app-1:/app/monitor.py
-  docker cp scheduler.py fund-monitor-app-1:/app/scheduler.py
-  docker cp alerts.py fund-monitor-app-1:/app/alerts.py
-  docker cp app.py fund-monitor-app-1:/app/app.py
-  docker cp database.py fund-monitor-app-1:/app/database.py
-  docker restart fund-monitor-app-1
-"
+# Da qualsiasi PC: pubblica GitHub + aggiorna container VPS in un colpo solo
+./deploy.sh
 ```
 
-**Caso B — modifiche a `docker-compose.yml` (volume mount, porte, env var):**
-```bash
-# 1. Copia docker-compose.yml + tutti i file .py/.html
-scp docker-compose.yml dashboard.html monitor.py scheduler.py alerts.py app.py database.py root@76.13.37.133:/opt/fund-monitor-src/
+`deploy.sh` fa in sequenza:
+1. `git add` + `git commit` + `git push` (solo se ci sono modifiche)
+2. SSH VPS: `git pull origin main` (scarta modifiche monitor su Excel, prende ultima versione)
+3. SSH VPS: `docker cp` di tutti i file `.py`/`.html` nel container + `docker restart`
 
-# 2. Ricrea il container con nome progetto corretto, POI ricopia i file (force-recreate li cancella!)
-ssh root@76.13.37.133 "
-  cd /opt/fund-monitor-src
-  docker compose -p fund-monitor up -d --force-recreate app
-  docker cp dashboard.html fund-monitor-app-1:/app/dashboard.html
-  docker cp monitor.py fund-monitor-app-1:/app/monitor.py
-  docker cp scheduler.py fund-monitor-app-1:/app/scheduler.py
-  docker cp alerts.py fund-monitor-app-1:/app/alerts.py
-  docker cp app.py fund-monitor-app-1:/app/app.py
-  docker cp database.py fund-monitor-app-1:/app/database.py
-  docker restart fund-monitor-app-1
-"
-```
-
-**Aggiornare l'Excel (aggiungere/rimuovere fondi):**
-```bash
-# Da qualsiasi PC con git + SSH: commit su GitHub + git pull sul VPS
-./aggiorna_excel_fondi.sh
-```
+> **Regola critica**: se cambia `docker-compose.yml` (volume mount, porte, env var), dopo il deploy normale eseguire anche:
+> ```bash
+> ssh root@76.13.37.133 "cd /root/fund_monitor_system && docker compose -p fund-monitor up -d --force-recreate app"
+> # poi subito dopo (force-recreate cancella i docker cp!):
+> ./deploy.sh
+> ```
 
 ### Comandi rapidi
 ```bash
 # Log live
-docker logs fund-monitor-app-1 --tail=30 -f
+ssh root@76.13.37.133 "docker logs fund-monitor-app-1 --tail=30 -f"
 
 # Trigger manuale monitor
-curl -X POST http://localhost:5000/api/trigger-update
+ssh root@76.13.37.133 "curl -s -X POST http://localhost:5000/api/trigger-update"
 
-# Query DB direttamente
-docker exec fund-monitor-postgres-1 psql -U fundmonitor -d funds -c "<SQL>"
+# Query DB
+ssh root@76.13.37.133 "docker exec fund-monitor-postgres-1 psql -U fundmonitor -d funds -c '<SQL>'"
 ```
 
 ### File principali
