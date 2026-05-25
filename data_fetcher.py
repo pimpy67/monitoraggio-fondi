@@ -247,6 +247,32 @@ class FundDataFetcher:
         return pd.DataFrame(columns=['date', 'nav'])
 
 
+    def get_benchmark_history(self, ticker: str, days: int = 120) -> pd.Series:
+        """
+        Recupera storico prezzi di un benchmark ETF da Yahoo Finance.
+        Usato per calcolare Signal Purity Score dei fondi.
+
+        Returns:
+            pd.Series con prezzi indicizzati per data (tz-naive), oppure pd.Series vuota
+        """
+        try:
+            import yfinance as yf
+            etf = yf.Ticker(ticker)
+            hist = etf.history(period=f"{days + 15}d")
+            if hist.empty or len(hist) < 20:
+                return pd.Series(dtype=float)
+            s = hist['Close'].copy()
+            # Rimuovi timezone per compatibilità con indici fondi
+            s.index = pd.to_datetime(s.index).tz_localize(None).normalize()
+            return s.tail(days)
+        except ImportError:
+            print("yfinance non installato")
+            return pd.Series(dtype=float)
+        except Exception as e:
+            print(f"  Benchmark {ticker}: errore fetch ({e})")
+            return pd.Series(dtype=float)
+
+
 def test_fetcher():
     """Test del data fetcher"""
     fetcher = FundDataFetcher()
