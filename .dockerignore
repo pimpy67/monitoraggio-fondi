@@ -7,3 +7,11 @@ data/
 fondi_monitoraggio_backup_*.xlsx
 *.log
 .DS_Store
+deploy.sh
+aggiorna_excel_fondi.sh
+CLAUDE.md
+README.md
+*.md
+.zencoder
+.zenflow
+memory/
