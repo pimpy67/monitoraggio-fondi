@@ -41,20 +41,21 @@ Documento di riferimento tecnico per il progetto. Caricato automaticamente a ogn
 ### Deploy — unico script
 
 ```bash
-# Da qualsiasi PC: pubblica GitHub + aggiorna container VPS in un colpo solo
+# Da qualsiasi PC: pubblica GitHub + rebuild immagine + aggiorna container VPS
 ./deploy.sh
 ```
 
 `deploy.sh` fa in sequenza:
-1. `git add` + `git commit` + `git push` (solo se ci sono modifiche)
-2. SSH VPS: `git pull origin main` (scarta modifiche monitor su Excel, prende ultima versione)
-3. SSH VPS: `docker cp` di tutti i file `.py`/`.html` nel container + `docker restart`
+1. `git add -A` + `git commit` + `git push` (solo se ci sono modifiche)
+2. SSH VPS: `git fetch && git reset --hard origin/main` (sincronizza repo git con GitHub)
+3. SSH VPS: `docker compose -p fund-monitor build app` (ricostruisce immagine dal codice aggiornato)
+4. SSH VPS: `docker compose -p fund-monitor up -d --force-recreate app` (ricrea container)
 
-> **Regola critica**: se cambia `docker-compose.yml` (volume mount, porte, env var), dopo il deploy normale eseguire anche:
+> **Prima esecuzione**: il build pip install richiede ~14 minuti. I deploy successivi usano il cache Docker — solo pochi secondi se cambiano solo file `.py`/`.html`.
+
+> **Backup DB**: cron automatico ogni giorno alle 18:30 CEST (lun-ven) → `/root/backups/funds_YYYYMMDD.sql.gz` (ultimi 14 giorni). Per copiare l'ultimo backup in locale:
 > ```bash
-> ssh root@76.13.37.133 "cd /root/fund_monitor_system && docker compose -p fund-monitor up -d --force-recreate app"
-> # poi subito dopo (force-recreate cancella i docker cp!):
-> ./deploy.sh
+> scp root@76.13.37.133:/root/backups/funds_latest.sql.gz .
 > ```
 
 ### Comandi rapidi
@@ -67,6 +68,9 @@ ssh root@76.13.37.133 "curl -s -X POST http://localhost:5000/api/trigger-update"
 
 # Query DB
 ssh root@76.13.37.133 "docker exec fund-monitor-postgres-1 psql -U fundmonitor -d funds -c '<SQL>'"
+
+# Lista backup disponibili
+ssh root@76.13.37.133 "ls -lah /root/backups/"
 ```
 
 ### File principali
