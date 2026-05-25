@@ -24,8 +24,8 @@ echo ""
 echo "=== [2/3] Git pull VPS ==="
 ssh -i "$SSH_KEY" "$VPS" "
     cd $VPS_REPO
-    git checkout -- fondi_monitoraggio.xlsx
-    git pull origin main
+    git fetch origin main
+    git reset --hard origin/main
 "
 
 # 3. Rebuild immagine Docker e ricrea il container
