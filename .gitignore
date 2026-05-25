@@ -28,3 +28,7 @@ Thumbs.db
 # Backup Excel
 ~$*.xlsx
 *.xlsx.bak
+
+# Sottosistemi separati (repo propri)
+etf_monitor_system/
+fund_monitor_system/
