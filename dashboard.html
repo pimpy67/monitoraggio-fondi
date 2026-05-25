@@ -255,6 +255,18 @@
         .ev-table th { padding:5px 8px; color:#666; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.08); text-align:left; font-size:0.8em; }
         .ev-table td { padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.04); color:#bbb; vertical-align:middle; }
         .modal-box-wide { background: #16213e; border: 1px solid rgba(255,255,255,0.15); border-radius: 14px; padding: 24px 26px; width: 560px; max-width: 96vw; box-shadow: 0 16px 48px rgba(0,0,0,0.6); max-height: 90vh; overflow-y: auto; }
+        /* ── Pannello Condizioni L1 ── */
+        .l1-cond-panel { background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+        .l1-cond-title { font-size: 0.72em; color: #777; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .l1-cond-score { background: rgba(255,255,255,0.07); border-radius: 10px; padding: 2px 8px; font-size: 1.1em; color: #ccc; font-weight: bold; letter-spacing: 0; text-transform: none; }
+        .l1-cond-row { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.8em; }
+        .l1-cond-row:last-child { border-bottom: none; }
+        .l1-cond-icon { font-size: 1em; width: 18px; flex-shrink: 0; margin-top: 1px; }
+        .l1-cond-name { color: #aaa; width: 120px; flex-shrink: 0; }
+        .l1-cond-detail { color: #ccc; flex: 1; }
+        .l1-cond-detail .ok { color: #00B050; }
+        .l1-cond-detail .ko { color: #DC3545; }
+        .l1-cond-detail .na { color: #666; font-style: italic; }
         /* ── Fund Detail Modal ── */
         .detail-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.78); z-index: 1100; backdrop-filter: blur(5px); align-items: flex-start; justify-content: center; overflow-y: auto; padding: 20px 10px; }
         .detail-overlay.open { display: flex; }
@@ -548,6 +560,8 @@
                 </div>
                 <!-- KPI attuali -->
                 <div class="detail-kpis" id="detailKpis"></div>
+                <!-- Condizioni L1 -->
+                <div id="detailL1Conditions" style="display:none;"></div>
                 <!-- Signal Purity Panel -->
                 <div id="detailPurityPanel" style="display:none;"></div>
                 <!-- Sentiment -->
@@ -1821,6 +1835,7 @@
             document.getElementById('detailTableBody').innerHTML = '';
             document.getElementById('pfPanels').style.display = 'none';
             document.getElementById('detailNarrative').style.display = 'none';
+            document.getElementById('detailL1Conditions').style.display = 'none';
             document.getElementById('detailPurityPanel').style.display = 'none';
             [30,60,90].forEach(d => document.getElementById('dbtn'+d).classList.toggle('active', d===30));
             await loadFundDetail(isin, 30);
@@ -1883,11 +1898,101 @@
                 renderPortfolioPanels(pa, data.current);
             }
             renderDetailKpis(data);
+            renderL1Conditions(data);
             renderPurityPanel(data.signal_purity, data.asset_type);
             renderDetailSentiment(data.sentiment);
             renderDetailChart(data.history, pa, switchEvents || []);
             renderDetailTable(data.history);
             renderAnalysisNarrative(data);
+        }
+
+        function renderL1Conditions(data) {
+            const el = document.getElementById('detailL1Conditions');
+            const cond = data.l1_conditions;
+            if (!cond) { el.style.display = 'none'; return; }
+
+            const v = cond.values || {};
+            const t = cond.thresholds || {};
+            const icon = ok => ok ? '✅' : '❌';
+            const fmt = (val, dec) => val != null ? Number(val).toFixed(dec) : '—';
+
+            const rows = [
+                {
+                    key: 'allineamento_ok',
+                    label: 'Allineamento',
+                    detail: () => {
+                        const navV = fmt(v.nav, 4), mm20V = fmt(v.mm20, 4), mm50V = fmt(v.mm50, 4);
+                        const ok1 = v.nav > v.mm20, ok2 = v.mm20 > v.mm50;
+                        return `NAV <span class="${ok1?'ok':'ko'}">${navV}</span> &gt; MM20 <span class="${ok1?'ok':'ko'}">${mm20V}</span> &gt; MM50 <span class="${ok2?'ok':'ko'}">${mm50V}</span>`;
+                    }
+                },
+                {
+                    key: 'persistenza_ok',
+                    label: 'Persistenza',
+                    detail: () => {
+                        const d = v.days_above_mm20, req = t.days_above_ma, sl = v.mm20_slope_ok;
+                        return `Giorni MM20: <span class="${d>=req?'ok':'ko'}">${d ?? '—'}/${req}</span> · Slope: <span class="${sl?'ok':'ko'}">${sl?'↑':'→/↓'}</span>`;
+                    }
+                },
+                {
+                    key: 'rsi_optimal',
+                    label: 'RSI ottimale',
+                    detail: () => {
+                        const r = fmt(v.rsi, 1), lo = t.rsi_min, hi = t.rsi_max;
+                        const ok = v.rsi >= lo && v.rsi <= hi;
+                        return `RSI <span class="${ok?'ok':'ko'}">${r}</span> · range <span class="na">[${lo}–${hi}]</span>`;
+                    }
+                },
+                {
+                    key: 'distance_ok',
+                    label: 'Distanza MM20',
+                    detail: () => {
+                        const d = fmt(v.dist_mm20, 1), mx = t.max_dist_mm20;
+                        const ok = v.dist_mm20 > 0 && v.dist_mm20 <= mx;
+                        return `Dist <span class="${ok?'ok':'ko'}">${d}%</span> · max <span class="na">${mx}%</span>`;
+                    }
+                },
+                {
+                    key: 'adx_ok',
+                    label: 'ADX',
+                    detail: () => {
+                        if (!t.adx_required) return `<span class="na">Non richiesto (${data.asset_type})</span>`;
+                        const a = fmt(v.adx, 1), thr = t.adx_threshold;
+                        const ok = v.adx >= thr;
+                        return `ADX <span class="${ok?'ok':'ko'}">${a}</span> · soglia <span class="na">${thr}</span>`;
+                    }
+                },
+                {
+                    key: 'nav_pendenza_ok',
+                    label: 'Pendenza NAV',
+                    detail: () => {
+                        const r3ok = (v.roc3 ?? 0) > 0, r5ok = (v.roc5 ?? 0) > 0;
+                        const rdok = (v.rising_days ?? 0) >= 3;
+                        return `ROC3 <span class="${r3ok?'ok':'ko'}">${fmt(v.roc3,2)}%</span> · ROC5 <span class="${r5ok?'ok':'ko'}">${fmt(v.roc5,2)}%</span> · rialzi <span class="${rdok?'ok':'ko'}">${v.rising_days ?? '—'}/5</span>`;
+                    }
+                }
+            ];
+
+            const passed = rows.filter(r => cond[r.key]).length;
+            const scoreColor = passed === 6 ? '#00B050' : passed >= 4 ? '#FFC000' : '#DC3545';
+
+            let html = `<div class="l1-cond-panel">
+                <div class="l1-cond-title">Condizioni L1
+                    <span class="l1-cond-score" style="color:${scoreColor}">${passed}/6</span>
+                </div>`;
+
+            rows.forEach(r => {
+                const ok = cond[r.key];
+                html += `<div class="l1-cond-row">
+                    <span class="l1-cond-icon">${icon(ok)}</span>
+                    <span class="l1-cond-name">${r.label}</span>
+                    <span class="l1-cond-detail">${r.detail()}</span>
+                </div>`;
+            });
+
+            html += '</div>';
+            el.innerHTML = html;
+            el.style.display = 'block';
         }
 
         function renderPurityPanel(sp, assetType) {

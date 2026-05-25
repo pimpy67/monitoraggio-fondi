@@ -1067,12 +1067,58 @@ def fund_detail(isin):
         except Exception as exc:
             portfolio_analysis = {'error': str(exc)}
 
+    # ── Condizioni L1 con valori reali ───────────────────────────────────────
+    roc3 = fmt((prices.iloc[-1] - prices.iloc[-4]) / prices.iloc[-4] * 100, 2) if len(prices) >= 4 else None
+    roc5 = fmt((prices.iloc[-1] - prices.iloc[-6]) / prices.iloc[-6] * 100, 2) if len(prices) >= 6 else None
+    rising_days = int(sum(1 for v in prices.diff().tail(5) if v > 0)) if len(prices) >= 5 else None
+    days_above_mm20 = 0
+    for i in range(len(prices) - 1, -1, -1):
+        if prices.iloc[i] > ma20.iloc[i]:
+            days_above_mm20 += 1
+        else:
+            break
+    mm20_slope_ok = bool(ma20.iloc[-1] > ma20.iloc[-3]) if len(ma20) >= 3 else False
+    cond_from_dash = fund_info.get('conditions', {})
+    adx_required = asset_type in ('equity_developed', 'emerging_markets', 'sector_thematic', 'commodities')
+    l1_conditions = {
+        'allineamento_ok':  bool(cond_from_dash.get('allineamento_ok', nav_v > mm20_v > (mm50_v or 0))),
+        'persistenza_ok':   bool(cond_from_dash.get('persistenza_ok', days_above_mm20 >= analyzer.days_above_ma and mm20_slope_ok)),
+        'rsi_optimal':      bool(cond_from_dash.get('rsi_optimal', analyzer.rsi_optimal_low <= rsi <= analyzer.rsi_optimal_high)),
+        'distance_ok':      bool(cond_from_dash.get('distance_ok', 0 < dist <= analyzer.max_distance_from_ma)),
+        'adx_ok':           bool(cond_from_dash.get('adx_ok', True)),
+        'nav_pendenza_ok':  bool(cond_from_dash.get('nav_pendenza_ok',
+                                (roc3 or 0) > 0 and (roc5 or 0) > 0 and (rising_days or 0) >= 3)),
+        'values': {
+            'nav':              fmt(nav_v, 4),
+            'mm20':             fmt(mm20_v, 4),
+            'mm50':             fmt(mm50_v, 4),
+            'rsi':              fmt(rsi, 1),
+            'adx':              fmt(adx_v, 1),
+            'dist_mm20':        fmt(dist, 1),
+            'roc3':             roc3,
+            'roc5':             roc5,
+            'rising_days':      rising_days,
+            'days_above_mm20':  days_above_mm20,
+            'mm20_slope_ok':    mm20_slope_ok,
+        },
+        'thresholds': {
+            'rsi_min':       analyzer.rsi_optimal_low,
+            'rsi_max':       analyzer.rsi_optimal_high,
+            'max_dist_mm20': analyzer.max_distance_from_ma,
+            'adx_threshold': analyzer.adx_threshold,
+            'days_above_ma': analyzer.days_above_ma,
+            'adx_required':  adx_required,
+        },
+        'buy_count': fund_info.get('buy_count'),
+    }
+
     return jsonify({
         'isin':         isin,
         'fund_name':    fund_info.get('nome') or isin,
         'asset_type':   asset_type,
         'level':        fund_info.get('livello'),
         'signal_purity': fund_info.get('signal_purity'),
+        'l1_conditions': l1_conditions,
         'history':      history,
         'count':        len(history),
         'dist_52w':     dist_52w,
