@@ -72,7 +72,17 @@
         /* Badge NUOVO (lampeggiante, solo gg 1-2) */
         @keyframes pulse-nuovo { 0%,100%{opacity:1} 50%{opacity:0.35} }
         .badge-nuovo { display:inline-block; background:#00B050; color:#fff; font-size:0.58em; font-weight:bold; padding:1px 5px; border-radius:3px; margin-left:5px; vertical-align:middle; animation:pulse-nuovo 1.1s ease-in-out infinite; letter-spacing:0.5px; }
-        .badge-exl1 { display:inline-block; background:rgba(248,81,73,0.15); color:#f87070; font-size:0.6em; font-weight:bold; padding:1px 5px; border-radius:3px; margin-left:4px; vertical-align:middle; border:1px solid rgba(248,81,73,0.3); white-space:nowrap; flex-shrink:0; }
+        .badge-exl1 { display:inline-block; background:rgba(248,81,73,0.15); color:#f87070; font-size:0.6em; font-weight:bold; padding:1px 5px; border-radius:3px; margin-left:4px; vertical-align:middle; border:1px solid rgba(248,81,73,0.3); white-space:nowrap; flex-shrink:0; cursor:pointer; }
+        /* Righe fondi usciti recentemente da L1 */
+        tr.exl1-row { background: rgba(248,81,73,0.06) !important; border-left: 3px solid rgba(248,81,73,0.45); }
+        tr.exl1-row:hover { background: rgba(248,81,73,0.12) !important; }
+        tr.exl1-separator td { padding: 0 !important; height: 2px; background: linear-gradient(90deg, rgba(248,81,73,0.35), transparent); }
+        /* Banner uscita L1 nel lightbox */
+        .exl1-banner { background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.82em; }
+        .exl1-banner .exl1-rule { font-weight: bold; color: #f87070; margin-bottom: 4px; }
+        .exl1-banner .exl1-stats { display: flex; gap: 16px; flex-wrap: wrap; color: #aaa; font-size: 0.9em; margin-top: 4px; }
+        .exl1-banner .exl1-stats span { white-space: nowrap; }
+        .exl1-banner .exl1-trigger { color: #888; margin-top: 3px; font-style: italic; font-size: 0.88em; }
         /* Badge "in procinto" per L2 con 5/6 condizioni (manca solo 1) */
         .badge-procinto { display:inline-block; font-size:0.62em; font-weight:bold; padding:1px 4px; border-radius:3px; margin-left:4px; vertical-align:middle; white-space:nowrap; }
         .badge-procinto.p5 { background:rgba(255,143,0,0.2); color:#FF9800; border:1px solid rgba(255,143,0,0.5); }
@@ -551,6 +561,8 @@
                 <button class="detail-close" onclick="closeDetail()">&times;</button>
             </div>
             <div class="detail-body">
+                <!-- Banner uscita L1 (visibile solo per fondi usciti recentemente) -->
+                <div id="detailExitBanner" style="display:none;"></div>
                 <!-- Pannelli Portfolio (visibili solo se fondo in portafoglio) -->
                 <div id="pfPanels" style="display:none;">
                     <div id="pfPerfPanel" class="pf-perf-panel"></div>
@@ -1004,6 +1016,15 @@
             }
         }
 
+        const EXIT_RULES = {
+            1: { name: 'A — Stop Loss',       color: '#aaa',     desc: 'NAV sotto MM20' },
+            2: { name: 'B — Trailing Stop',   color: '#fd7e14',  desc: 'MM5 < MM20' },
+            3: { name: 'C — Stanchezza RSI',  color: '#dc3545',  desc: 'RSI uscito da ipercomprato' },
+            4: { name: 'D — Uscita Parziale', color: '#E65100',  desc: 'RSI > 78 — Piede Dentro' },
+            5: { name: 'E — ADX Debole',      color: '#aaa',     desc: 'ADX < 20 + NAV < MM5' },
+            6: { name: 'F — Kill Switch',     color: '#b71c1c',  desc: 'Calo giornaliero ≤ −3%' },
+        };
+
         function buildRecentExitsMap() {
             recentExitsMap = {};
             const today = new Date(); today.setHours(0,0,0,0);
@@ -1013,7 +1034,16 @@
                 const existing = recentExitsMap[ex.isin];
                 if (!existing || exitDate > existing.exit_date) {
                     const daysAgo = Math.round((today - new Date(exitDate)) / (1000*60*60*24));
-                    recentExitsMap[ex.isin] = { exit_date: exitDate, days_ago: daysAgo };
+                    recentExitsMap[ex.isin] = {
+                        exit_date:   exitDate,
+                        days_ago:    daysAgo,
+                        exit_rule:   ex.exit_rule,
+                        exit_trigger: ex.exit_trigger || '',
+                        entry_date:  ex.entry_date,
+                        pct_gain:    ex.pct_gain,
+                        days_in_l1:  ex.days_in_l1,
+                        fund_name:   ex.fund_name,
+                    };
                 }
             });
         }
@@ -1232,7 +1262,15 @@
                 const compOk = activeCompany === 'all' || f.casa === activeCompany;
                 return catOk && compOk && matchesSearch(f);
             });
-            filtered.sort((a, b) => (b.buy_count || 0) - (a.buy_count || 0) || (b.rsi || 0) - (a.rsi || 0));
+            // Ex-L1 in cima (più recente prima), poi ordinamento standard
+            filtered.sort((a, b) => {
+                const aEx = recentExitsMap[a.isin];
+                const bEx = recentExitsMap[b.isin];
+                if (aEx && !bEx) return -1;
+                if (!aEx && bEx) return 1;
+                if (aEx && bEx) return aEx.days_ago - bEx.days_ago;
+                return (b.buy_count || 0) - (a.buy_count || 0) || (b.rsi || 0) - (a.rsi || 0);
+            });
             const tbody = document.getElementById(`level${level}Body`);
             document.getElementById(`l${level}Count`).textContent = `${filtered.length} fondi`;
 
@@ -1243,7 +1281,10 @@
 
             filtered.forEach(f => { if (f.isin) allFundsMap[f.isin] = {nome: f.nome || f.isin, price: f.price || 0}; });
 
-            tbody.innerHTML = filtered.map(f => {
+            // Conta quanti ex-L1 ci sono per inserire il separatore
+            const exl1Count = filtered.filter(f => recentExitsMap[f.isin]).length;
+
+            tbody.innerHTML = filtered.map((f, idx) => {
                 const rsiClass = f.rsi < 30 ? 'low' : f.rsi > 70 ? 'high' : 'mid';
                 // Tag tipo asset
                 const assetTag = f.asset_type === 'bond_government' ? '<span style="color:#ffb347;font-size:0.68em;margin-left:2px" title="Gov/BT">GOV</span>'
@@ -1273,8 +1314,17 @@
                 const isin = f.isin || '';
                 const inPf = portfolioIsins.has(isin);
                 const pfBtn = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
-                const exl1 = (level === 2 || level === 3) && recentExitsMap[isin]
-                    ? `<span class="badge-exl1">Ex-L1 ${recentExitsMap[isin].days_ago}gg</span>` : '';
+                const exEntry = recentExitsMap[isin];
+                const isExL1 = !!(level === 2 || level === 3) && !!exEntry;
+                // Badge ex-L1: mostra giorni fa + gain/loss
+                let exl1 = '';
+                if (isExL1) {
+                    const rule = exEntry.exit_rule ? EXIT_RULES[exEntry.exit_rule] : null;
+                    const ruleLabel = rule ? ` · ${rule.name}` : '';
+                    const gainStr = exEntry.pct_gain != null ? ` · ${exEntry.pct_gain > 0 ? '+' : ''}${exEntry.pct_gain.toFixed(2)}%` : '';
+                    const tooltip = `Uscita ${exEntry.exit_date}${gainStr}${ruleLabel}${exEntry.exit_trigger ? '&#10;' + exEntry.exit_trigger : ''}`;
+                    exl1 = `<span class="badge-exl1" title="${tooltip}" onclick="event.stopPropagation();openFundDetail('${isin}')">↩ Ex-L1 ${exEntry.days_ago}gg fa</span>`;
+                }
                 // Purity badge
                 const sp = f.signal_purity;
                 const purityBadge = sp && sp.available
@@ -1284,7 +1334,11 @@
                 const c = f.conditions || {};
                 const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${c.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM">A</span>':'<span style="color:#555" title="Allineamento MM">A</span>'}${c.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${c.rsi_optimal?'<span style="color:#0f0" title="RSI ottimale">M</span>':'<span style="color:#555" title="RSI ottimale">M</span>'}${c.distance_ok?'<span style="color:#0f0" title="Distanza <max">D</span>':'<span style="color:#555" title="Distanza <max">D</span>'}${c.adx_entry_ok?'<span style="color:#0f0" title="ADX/esentato">X</span>':'<span style="color:#555" title="ADX/esentato">X</span>'}${c.nav_pendenza_ok?'<span style="color:#0f0" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>':'<span style="color:#555" title="Pendenza: ROC3>0, ROC5>0, 3+ gg in rialzo">T</span>'}</span>`;
 
-                return `<tr onclick="openFundDetail('${isin}')">
+                // Separatore dopo l'ultimo ex-L1
+                const separator = (isExL1 && exl1Count > 0 && idx === exl1Count - 1 && idx < filtered.length - 1)
+                    ? `<tr class="exl1-separator"><td colspan="9"></td></tr>` : '';
+
+                return `<tr class="${isExL1 ? 'exl1-row' : ''}" onclick="openFundDetail('${isin}')">
                     <td class="fund-name" title="${f.nome||isin}"><div class="fund-name-row"><span class="fund-name-text">${f.nome || '—'}</span>${assetTag}${procintoHtml}${exl1}${pfBtn}</div><span class="fund-isin">${isin}</span></td>
                     <td>${f.price ? f.price.toFixed(2) : '—'}</td>
                     ${fmtPct(f.pct_1d)}${fmtPct(f.pct_1w)}${fmtPct(f.pct_1m)}
@@ -1292,7 +1346,7 @@
                     <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '—'}</td>
                     <td class="buy-count bc${bc}">${condHtml}</td>
                     <td>${purityBadge}</td>
-                </tr>`;
+                </tr>${separator}`;
             }).join('');
         }
 
@@ -1826,8 +1880,8 @@
             currentDetailDays = 30;
             currentEntryData = entryData || null;
             document.getElementById('detailOverlay').classList.add('open');
-            // Titolo: cerca sia nei fondi della dashboard che nel portafoglio
-            const fundName = allFundsMap[isin]?.nome || (portfolioIsins.has(isin) ? isin : isin);
+            // Titolo
+            const fundName = allFundsMap[isin]?.nome || isin;
             document.getElementById('detailTitle').textContent = fundName;
             document.getElementById('detailIsin').textContent = isin;
             document.getElementById('detailKpis').innerHTML = '<span style="color:#555;font-size:0.8em;">Caricamento...</span>';
@@ -1838,11 +1892,39 @@
             document.getElementById('detailL1Conditions').style.display = 'none';
             document.getElementById('detailPurityPanel').style.display = 'none';
             [30,60,90].forEach(d => document.getElementById('dbtn'+d).classList.toggle('active', d===30));
+            // Banner uscita L1
+            const bannerEl = document.getElementById('detailExitBanner');
+            const exEntry = recentExitsMap[isin];
+            if (exEntry) {
+                const rule = exEntry.exit_rule ? EXIT_RULES[exEntry.exit_rule] : null;
+                const ruleColor = rule ? rule.color : '#f87070';
+                const ruleName = rule ? rule.name : 'Uscita L1';
+                const gainStr = exEntry.pct_gain != null
+                    ? `<span style="color:${exEntry.pct_gain >= 0 ? '#4caf50' : '#f44'}">${exEntry.pct_gain > 0 ? '+' : ''}${exEntry.pct_gain.toFixed(2)}%</span>`
+                    : '—';
+                const dInL1 = exEntry.days_in_l1 != null ? `${exEntry.days_in_l1} gg in L1` : '';
+                bannerEl.innerHTML = `
+                    <div class="exl1-banner">
+                        <div class="exl1-rule" style="color:${ruleColor}">↩ ${ruleName}</div>
+                        <div class="exl1-stats">
+                            <span>Uscito: <strong>${exEntry.exit_date}</strong></span>
+                            ${exEntry.entry_date ? `<span>Entrato: <strong>${exEntry.entry_date}</strong></span>` : ''}
+                            ${dInL1 ? `<span>${dInL1}</span>` : ''}
+                            <span>Performance: ${gainStr}</span>
+                        </div>
+                        ${exEntry.exit_trigger ? `<div class="exl1-trigger">${exEntry.exit_trigger}</div>` : ''}
+                    </div>`;
+                bannerEl.style.display = 'block';
+            } else {
+                bannerEl.style.display = 'none';
+                bannerEl.innerHTML = '';
+            }
             await loadFundDetail(isin, 30);
         }
 
         function closeDetail() {
             document.getElementById('detailOverlay').classList.remove('open');
+            document.getElementById('detailExitBanner').style.display = 'none';
             if (detailChart) { detailChart.destroy(); detailChart = null; }
             currentEntryData = null;
         }

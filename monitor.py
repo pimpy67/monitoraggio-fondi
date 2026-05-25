@@ -831,6 +831,14 @@ class FundMonitor:
             }
             exit_rule    = fund_result['analysis'].get('level_conditions', {}).get('exit_rule')
             exit_trigger = fund_result['analysis'].get('level_conditions', {}).get('exit_trigger', '')
+            # Bug fix: se Excel aveva livello != 1, suggest_level() non valuta le exit rule.
+            # Ri-analizziamo con level=1 per recuperare la regola di uscita reale.
+            if exit_rule is None and fund_result.get('livello', 1) != 1:
+                _asset_type = fund_result['analysis'].get('asset_type', 'equity_developed')
+                _reanalyzer = TechnicalAnalyzer(asset_type=_asset_type)
+                _reanalysis = _reanalyzer.analyze_fund(fund_result['prices'], level=1)
+                exit_rule    = _reanalysis.get('level_conditions', {}).get('exit_rule')
+                exit_trigger = _reanalysis.get('level_conditions', {}).get('exit_trigger', '') or ''
             rule_label   = f'[Regola {exit_rule}: {exit_trigger}]' if exit_rule else ''
             pct_str      = f'{pct_gain:+.2f}%' if pct_gain is not None else 'N/D'
             add_log(f"  🔴 Uscita L1: {fund_result['nome'][:40]} — {pct_str} {rule_label}")
