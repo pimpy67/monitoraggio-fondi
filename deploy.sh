@@ -40,7 +40,7 @@ ssh -i "$SSH_KEY" "$VPS" "
 
 echo ""
 echo "=== [4/4] Trigger monitor (aggiorna dashboard_data.json) ==="
-ssh -i "$SSH_KEY" "$VPS" "curl -s -X POST http://localhost:5000/api/trigger-update"
+ssh -i "$SSH_KEY" "$VPS" "until curl -sf http://localhost:5000/api/health > /dev/null 2>&1; do sleep 2; done && curl -s -X POST http://localhost:5000/api/trigger-update"
 echo ""
 echo "Deploy completato. Dashboard: https://fondi.andreapavan.tech"
 echo "Il monitor sta girando in background (~10 min). Poi ricarica la dashboard."
