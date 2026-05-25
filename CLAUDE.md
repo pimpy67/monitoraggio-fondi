@@ -47,7 +47,7 @@ Documento di riferimento tecnico per il progetto. Caricato automaticamente a ogn
 **Caso A — modifiche solo a file .py / .html (deploy normale):**
 ```bash
 # 1. Copia i file modificati nella deploy dir del VPS
-scp dashboard.html monitor.py scheduler.py alerts.py app.py root@76.13.37.133:/opt/fund-monitor-src/
+scp dashboard.html monitor.py scheduler.py alerts.py app.py database.py root@76.13.37.133:/opt/fund-monitor-src/
 
 # 2. Copia nel container e riavvia
 ssh root@76.13.37.133 "
@@ -57,6 +57,7 @@ ssh root@76.13.37.133 "
   docker cp scheduler.py fund-monitor-app-1:/app/scheduler.py
   docker cp alerts.py fund-monitor-app-1:/app/alerts.py
   docker cp app.py fund-monitor-app-1:/app/app.py
+  docker cp database.py fund-monitor-app-1:/app/database.py
   docker restart fund-monitor-app-1
 "
 ```
@@ -64,7 +65,7 @@ ssh root@76.13.37.133 "
 **Caso B — modifiche a `docker-compose.yml` (volume mount, porte, env var):**
 ```bash
 # 1. Copia docker-compose.yml + tutti i file .py/.html
-scp docker-compose.yml dashboard.html monitor.py scheduler.py alerts.py app.py root@76.13.37.133:/opt/fund-monitor-src/
+scp docker-compose.yml dashboard.html monitor.py scheduler.py alerts.py app.py database.py root@76.13.37.133:/opt/fund-monitor-src/
 
 # 2. Ricrea il container con nome progetto corretto, POI ricopia i file (force-recreate li cancella!)
 ssh root@76.13.37.133 "
@@ -75,6 +76,7 @@ ssh root@76.13.37.133 "
   docker cp scheduler.py fund-monitor-app-1:/app/scheduler.py
   docker cp alerts.py fund-monitor-app-1:/app/alerts.py
   docker cp app.py fund-monitor-app-1:/app/app.py
+  docker cp database.py fund-monitor-app-1:/app/database.py
   docker restart fund-monitor-app-1
 "
 ```
