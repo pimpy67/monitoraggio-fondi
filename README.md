@@ -1,168 +1,103 @@
-# 📊 Fund Monitor System
+# Fund Monitor System
 
-Sistema automatizzato di monitoraggio fondi a 3 livelli con alert email e dashboard HTML.
+Sistema automatizzato di monitoraggio fondi a 4 livelli con alert email e dashboard web.
 
-## 🎯 Funzionalità
-
-- **Monitoraggio giornaliero** alle 18:00
-- **3 livelli di monitoraggio**: Core (L1), Watchlist (L2), Universe (L3)
-- **Analisi tecnica**: Media Mobile 15gg, RSI 14, MACD
-- **Alert email** per segnali BUY/SELL
-- **Dashboard web** con semafori e filtri
-- **File Excel** per gestione fondi (aggiungi/rimuovi/promuovi)
+Dashboard: **https://fondi.andreapavan.tech**
 
 ---
 
-## 🚀 Deploy su Railway
+## Infrastruttura
 
-### 1. Crea account Railway
-Vai su [railway.app](https://railway.app) e registrati (gratis con GitHub)
-
-### 2. Nuovo progetto
-- Click "New Project"
-- Seleziona "Deploy from GitHub repo"
-- Connetti il tuo repository
-
-### 3. Configura variabili ambiente
-Nel pannello Railway, vai su "Variables" e aggiungi:
-
-```
-EMAIL_SENDER=tua-email@gmail.com
-EMAIL_PASSWORD=tua-app-password-gmail
-EMAIL_RECIPIENT=andreapavan67@gmail.com
-MONITOR_HOUR=18
-MONITOR_MINUTE=0
-RUN_ON_START=true
-```
-
-### 4. Setup Gmail per invio email
-
-1. Vai su [Google Account Security](https://myaccount.google.com/security)
-2. Attiva **Verifica in 2 passaggi**
-3. Vai su **Password per le app**
-4. Crea nuova password per "Posta"
-5. Usa questa password come `EMAIL_PASSWORD`
-
-### 5. Deploy
-Railway farà automaticamente il deploy. La dashboard sarà disponibile all'URL fornito.
+- **VPS**: Hostinger Ubuntu 24.04 LTS — `76.13.37.133`
+- **Container Docker**: `fund-monitor-app-1` → porta 5000
+- **Database**: PostgreSQL in Docker
+- **Reverse proxy**: Nginx + Cloudflare (SSL Full strict)
+- **Email**: Resend API (`onboarding@resend.dev`)
 
 ---
 
-## 📁 Struttura File
-
-```
-fund_monitor_system/
-├── main.py                 # Entry point principale
-├── monitor.py              # Logica monitoraggio
-├── data_fetcher.py         # Recupero NAV fondi
-├── technical_analysis.py   # Calcolo indicatori
-├── alerts.py               # Sistema email
-├── app.py                  # Web server Flask
-├── scheduler.py            # Scheduler giornaliero
-├── dashboard.html          # Dashboard web
-├── fondi_monitoraggio.xlsx # File Excel master
-├── requirements.txt        # Dipendenze Python
-├── Procfile               # Config Railway
-└── data/                  # Dati runtime
-    ├── dashboard_data.json
-    └── history/           # Storico prezzi
-```
-
----
-
-## 📋 Gestione Fondi (Excel)
-
-### Aprire il file
-Scarica `fondi_monitoraggio.xlsx` e aprilo con Excel
-
-### Aggiungere un fondo
-1. Vai al foglio "Fondi"
-2. Aggiungi nuova riga con:
-   - **Livello**: 1, 2, o 3
-   - **ISIN**: Codice ISIN del fondo
-   - **Nome Fondo**: Nome completo
-   - **Casa Gestione**: Es. "Fidelity"
-   - **Categoria**: Es. "AI_Tech", "Gold", "Healthcare"
-   - **Valuta**: "EUR" o "EUR Hedged"
-
-### Rimuovere un fondo
-Cancella la riga corrispondente
-
-### Promuovere/Retrocedere
-Cambia il numero nella colonna "Livello":
-- `3 → 2`: Promuovi a Watchlist
-- `2 → 1`: Promuovi a Core
-- `1 → 2`: Retrocedi a Watchlist
-- `2 → 3`: Retrocedi a Universe
-
-### Categorie disponibili
-- `AI_Tech` - Intelligenza Artificiale e Tecnologia
-- `Gold` - Metalli Preziosi
-- `Healthcare` - Settore Salute
-- `Energy` - Energia
-- `Global_Equity` - Azionari Globali
-- `Bond_EUR` - Obbligazionari EUR
-- `Money_Market` - Monetari
-
----
-
-## 🚦 Logica Segnali
-
-### Livello 1 (Core Portfolio)
-- **SELL** → Alert immediato email
-- Monitoraggio completo (MM + RSI + MACD)
-
-### Livello 2 (Watchlist)
-- **BUY forte** (≥2 indicatori) → Alert email
-- **SELL** → Alert email
-- Considera promozione a L1
-
-### Livello 3 (Universe)
-- Alert solo se **≥2 indicatori concordano**
-- Screening per opportunità
-- Considera promozione a L2
-
----
-
-## 📧 Tipi di Email
-
-1. **Alert BUY** 🟢 - Segnale di acquisto
-2. **Alert SELL** 🔴 - Segnale di vendita
-3. **Report Giornaliero** 📊 - Riepilogo alle 18:00
-
----
-
-## 🛠 Esecuzione Locale (Test)
+## Deploy
 
 ```bash
-# Installa dipendenze
-pip install -r requirements.txt
-
-# Esegui
-python main.py
+./deploy.sh
 ```
 
-Dashboard su: http://localhost:5000
+Fa in sequenza: `git push` → SSH git reset sul VPS → docker build → docker up.
 
 ---
 
-## 💰 Costi Railway
+## Struttura file
 
-- **Hobby Plan**: ~$5/mese
-- Include: 500 ore/mese, 100GB bandwidth
-- Sufficiente per questo sistema
+```
+├── app.py                  # Flask API + serving dashboard
+├── monitor.py              # Logica principale: fetch NAV, calcolo livelli
+├── technical_analysis.py   # Indicatori tecnici, logica L0/L1/L2/L3
+├── data_fetcher.py         # Fetch NAV da FT Markets (backup: Yahoo Finance)
+├── database.py             # Wrapper PostgreSQL
+├── scheduler.py            # Scheduler: 18:00 CEST principale, 09:00 silenzioso
+├── alerts.py               # Email Resend: nuovi L1/L0, uscite, segnali portafoglio
+├── dashboard.html          # Frontend SPA
+├── fondi_monitoraggio.xlsx # Excel master — fonte di verità per lista fondi
+├── deploy.sh               # Script deploy completo
+├── docker-compose.yml
+└── etf_monitor_system/     # Sistema ETF separato (repo git proprio)
+```
 
 ---
 
-## 📞 Supporto
+## Livelli
 
-Per problemi o domande, controlla:
-1. Log su Railway dashboard
-2. File `data/dashboard_data.json` per ultimi dati
-3. Endpoint `/api/status` per stato sistema
+| Livello | Nome | Descrizione |
+|---------|------|-------------|
+| **L3** | Universe | Tutti i fondi — monitoraggio passivo |
+| **L2** | Watchlist | NAV sopra MM20 da ≥3 giorni |
+| **L1** | Core Portfolio | 6 condizioni tecniche tutte soddisfatte — trend confermato |
+| **L0** | Deep Recovery | Fondo in forte calo con segnali di rimbalzo |
+
+### Condizioni entrata L1 (tutte obbligatorie)
+1. Allineamento: NAV > MM20 > MM50
+2. Persistenza: ≥5 giorni sopra MM20 + slope MM20 positivo
+3. RSI nel range ottimale per asset class
+4. Distanza MM20 ≤ soglia (non troppo esteso)
+5. ADX > soglia (solo azionari)
+6. Pendenza NAV: ROC_3 > 0 e ROC_5 > 0 e ≥3 giorni in rialzo su 5
 
 ---
 
-## ⚠️ Disclaimer
+## Gestione Excel (`fondi_monitoraggio.xlsx`)
 
-Questo sistema è solo a scopo informativo. Le decisioni di investimento sono responsabilità dell'utente. I segnali generati non costituiscono consulenza finanziaria.
+Il monitor legge la lista fondi dall'Excel e aggiorna automaticamente la colonna **Livello**.
+
+**Non modificare** la colonna Livello manualmente — viene sovrascritta dal monitor.
+
+Per aggiungere un fondo: aggiungi riga nel foglio "Fondi" con ISIN, Nome, Casa Gestione, Categoria, Valuta. Il monitor lo raccoglierà al run successivo.
+
+Per la lista delle categorie riconosciute e il mapping verso asset_type, vedere `CLAUDE.md`.
+
+---
+
+## Email alert
+
+- **Nuovi ingressi L1/L0** — email immediata
+- **Uscite L1** — email con regola di uscita e gain/loss
+- **Segnali portafoglio** — RSI tirato, stanchezza, ATH
+- Scheduler: run principale **18:00 CEST** con alert; run silenzioso **09:00 CEST** senza alert
+
+---
+
+## Comandi rapidi
+
+```bash
+# Log live
+ssh root@76.13.37.133 "docker logs fund-monitor-app-1 --tail=50 -f"
+
+# Trigger monitor manuale
+ssh root@76.13.37.133 "curl -s -X POST http://localhost:5000/api/trigger-update"
+
+# Query DB
+ssh root@76.13.37.133 "docker exec fund-monitor-postgres-1 psql -U fundmonitor -d funds -c '<SQL>'"
+```
+
+---
+
+> I segnali sono informativi, non consulenza finanziaria.
