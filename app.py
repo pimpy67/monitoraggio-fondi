@@ -648,9 +648,19 @@ def add_switch_event(isin):
         eid = db.add_portfolio_event(isin, 'switch', event_date, event_price,
                                      target_isin, target_fund_name, notes,
                                      target_price=target_price, target_date=target_date)
-        if eid >= 0:
-            return jsonify({'status': 'ok', 'id': eid, 'isin': isin})
-        return jsonify({'error': 'Errore salvataggio'}), 503
+        if eid < 0:
+            return jsonify({'error': 'Errore salvataggio'}), 503
+
+        # Auto-aggiunge il fondo destinazione al portafoglio se ISIN e prezzo forniti
+        if target_isin and target_price:
+            db.add_portfolio_entry(
+                target_isin,
+                target_date or event_date,
+                target_price,
+                target_fund_name or ''
+            )
+
+        return jsonify({'status': 'ok', 'id': eid, 'isin': isin})
     except Exception as e:
         logging.error(f"Errore route switch {isin}: {e}")
         return jsonify({'error': str(e)}), 500
