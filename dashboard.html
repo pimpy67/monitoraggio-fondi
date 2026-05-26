@@ -434,9 +434,20 @@
     <!-- Modal Switch -->
     <div class="modal-overlay" id="switchModal" onclick="if(event.target===this)closeSwitchModal()">
         <div class="modal-box-wide">
-            <h3>&#8644; Switch Parziale</h3>
+            <h3 id="switchModalTitle">&#8644; Switch</h3>
             <div id="switchFundLabel" style="font-size:0.82em;color:#5A8FD4;font-weight:bold;margin-bottom:16px;"></div>
             <input type="hidden" id="swIsin">
+
+            <div class="modal-field" style="margin-bottom:16px;">
+                <label>Percentuale switchata</label>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <input type="range" id="swPct" min="1" max="100" value="100" step="1"
+                           oninput="document.getElementById('swPctVal').textContent=this.value+'%';updateSwitchTitle(this.value)"
+                           style="flex:1;accent-color:#5A8FD4;">
+                    <span id="swPctVal" style="min-width:38px;text-align:right;font-weight:bold;color:#5A8FD4;">100%</span>
+                </div>
+                <div id="swPctNote" style="font-size:0.78em;color:#aaa;margin-top:4px;">Switch totale — il fondo di partenza verrà chiuso</div>
+            </div>
 
             <div style="font-size:0.72em;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;border-left:2px solid #00B050;padding-left:6px;">Fondo di Partenza</div>
             <div style="display:flex;gap:12px;margin-bottom:16px;">
@@ -1589,6 +1600,15 @@
 
         // ── Switch Modal ────────────────────────────────────────────────────
         let _switchIsin = null;
+        function updateSwitchTitle(pct) {
+            const n = parseInt(pct);
+            document.getElementById('switchModalTitle').textContent = n >= 100
+                ? '⇄ Switch Totale' : '⇄ Switch Parziale (' + n + '%)';
+            document.getElementById('swPctNote').textContent = n >= 100
+                ? 'Switch totale — il fondo di partenza verrà chiuso'
+                : 'Switch parziale — il fondo di partenza rimane attivo';
+            document.getElementById('swPctNote').style.color = n >= 100 ? '#FFC000' : '#aaa';
+        }
         function openSwitchModal(isin) {
             _switchIsin = isin;
             const p = (portfolioData || []).find(x => x.isin === isin) || {};
@@ -1601,6 +1621,10 @@
             document.getElementById('swTargetName').value = '';
             document.getElementById('swTargetIsin').value = '';
             document.getElementById('swNotes').value = '';
+            const pctEl = document.getElementById('swPct');
+            pctEl.value = 100;
+            document.getElementById('swPctVal').textContent = '100%';
+            updateSwitchTitle(100);
             document.getElementById('switchModal').classList.add('open');
             setTimeout(() => document.getElementById('swDate').focus(), 100);
         }
@@ -1617,6 +1641,7 @@
             const targetName = document.getElementById('swTargetName').value.trim();
             const targetIsin = document.getElementById('swTargetIsin').value.trim();
             const notes = document.getElementById('swNotes').value.trim();
+            const pct = parseInt(document.getElementById('swPct').value) || 100;
             if (!date) { alert('Inserisci la data NAV del fondo di partenza'); return; }
             const payload = {
                 event_date: date,
@@ -1625,7 +1650,8 @@
                 target_price: isNaN(targetPrice) || targetPrice <= 0 ? null : targetPrice,
                 target_fund_name: targetName || null,
                 target_isin: targetIsin || null,
-                notes: notes || null
+                notes: notes || null,
+                pct: pct
             };
             try {
                 const res = await fetch('/api/portfolio/' + isin + '/switch', {

@@ -638,6 +638,7 @@ def add_switch_event(isin):
         target_isin = (data.get('target_isin') or '').strip().upper() or None
         target_fund_name = (data.get('target_fund_name') or '').strip() or None
         notes = (data.get('notes') or '').strip() or None
+        pct = int(data.get('pct') or 100)
         if not event_date:
             return jsonify({'error': 'Data switch fondo partenza obbligatoria'}), 400
         try:
@@ -651,6 +652,10 @@ def add_switch_event(isin):
         if eid < 0:
             return jsonify({'error': 'Errore salvataggio'}), 503
 
+        # Switch totale: chiude il fondo di partenza
+        if pct >= 100 and event_price:
+            db.exit_portfolio_entry(isin, event_date, event_price)
+
         # Auto-aggiunge il fondo destinazione al portafoglio se ISIN e prezzo forniti
         if target_isin and target_price:
             db.add_portfolio_entry(
@@ -660,7 +665,7 @@ def add_switch_event(isin):
                 target_fund_name or ''
             )
 
-        return jsonify({'status': 'ok', 'id': eid, 'isin': isin})
+        return jsonify({'status': 'ok', 'id': eid, 'isin': isin, 'pct': pct})
     except Exception as e:
         logging.error(f"Errore route switch {isin}: {e}")
         return jsonify({'error': str(e)}), 500
