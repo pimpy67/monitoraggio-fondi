@@ -34,7 +34,9 @@ echo "=== [3/3] Build + deploy container ==="
 ssh -i "$SSH_KEY" "$VPS" "
     cd $VPS_REPO
     docker compose -p fund-monitor build app
-    docker compose -p fund-monitor up -d --force-recreate app
+    # Rimuove tutti i container app (anche stale con hash nel nome) prima di ripartire
+    docker ps -a --filter name=fund-monitor-app --format '{{.Names}}' | xargs -r docker rm -f
+    docker compose -p fund-monitor up -d app
     echo 'Container aggiornato con la nuova immagine.'
 "
 
