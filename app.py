@@ -82,8 +82,7 @@ def _should_run_today():
         if not last_update:
             return True
 
-        last_dt = datetime.fromisoformat(last_update)
-        # Se l'ultimo aggiornamento non e' di oggi E siamo dopo l'ora programmata
+        last_dt = datetime.fromisoformat(last_update.replace('Z', '').split('+')[0])
         if last_dt.date() < now.date() and now.hour >= monitor_hour:
             return True
     except:
@@ -272,10 +271,10 @@ def health_check():
     hours_since_update = None
     if last_update:
         try:
-            last_dt = datetime.fromisoformat(last_update)
+            lu = last_update.replace('Z', '').split('+')[0]
+            last_dt = datetime.fromisoformat(lu)
             delta = now - last_dt
             hours_since_update = round(delta.total_seconds() / 3600, 1)
-            # Consideriamo fresco se aggiornato nelle ultime 24h
             stale = hours_since_update > 24
         except Exception:
             pass
@@ -307,7 +306,8 @@ def health_check():
         message = 'Sistema operativo - tutti i fondi aggiornati'
     elif stale:
         status = 'red'
-        message = f'Dati non aggiornati da {hours_since_update}h'
+        hrs_str = f'{hours_since_update}h' if hours_since_update is not None else '?h'
+        message = f'Dati non aggiornati da {hrs_str}'
     elif funds_error > 0 or not db_ok:
         status = 'yellow'
         problems = []
