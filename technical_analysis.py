@@ -53,7 +53,6 @@ class TechnicalAnalyzer:
             'rsi_optimal_low': 55,
             'rsi_optimal_high': 65,
             'max_distance_from_ma': 2.5,
-            'ma_signal_threshold': 2.0,
             'bb_condition': 'upper_half',
         },
         'emerging_markets': {
@@ -71,7 +70,6 @@ class TechnicalAnalyzer:
             'rsi_optimal_low': 55,
             'rsi_optimal_high': 65,
             'max_distance_from_ma': 3.0,
-            'ma_signal_threshold': 2.0,
             'bb_condition': 'upper_half',
         },
         'sector_thematic': {
@@ -89,7 +87,6 @@ class TechnicalAnalyzer:
             'rsi_optimal_low': 54,
             'rsi_optimal_high': 70,
             'max_distance_from_ma': 3.5,
-            'ma_signal_threshold': 2.0,
             'bb_condition': 'upper_half',
         },
         'commodities': {
@@ -107,7 +104,6 @@ class TechnicalAnalyzer:
             'rsi_optimal_low': 54,
             'rsi_optimal_high': 66,
             'max_distance_from_ma': 3.0,
-            'ma_signal_threshold': 2.0,
             'bb_condition': 'upper_half',
         },
         # ── Monetari ─────────────────────────────────────────────────────────
@@ -128,7 +124,6 @@ class TechnicalAnalyzer:
             'rsi_optimal_low': 40,
             'rsi_optimal_high': 95,
             'max_distance_from_ma': 0.5,
-            'ma_signal_threshold': 0.1,
             'bb_condition': 'above_ma',
             'rsi_exhaustion_threshold': 92,
         },
@@ -146,7 +141,6 @@ class TechnicalAnalyzer:
             'rsi_optimal_low': 45,
             'rsi_optimal_high': 68,
             'max_distance_from_ma': 1.5,
-            'ma_signal_threshold': 0.5,
             'bb_condition': 'above_ma',
         },
         'bond_corporate': {
@@ -162,7 +156,6 @@ class TechnicalAnalyzer:
             'rsi_optimal_low': 48,
             'rsi_optimal_high': 65,
             'max_distance_from_ma': 2.0,
-            'ma_signal_threshold': 0.8,
             'bb_condition': 'above_ma',
         },
         'high_yield': {
@@ -178,7 +171,6 @@ class TechnicalAnalyzer:
             'rsi_optimal_low': 50,
             'rsi_optimal_high': 66,
             'max_distance_from_ma': 3.0,
-            'ma_signal_threshold': 1.0,
             'bb_condition': 'above_ma',
         },
     }
@@ -293,7 +285,6 @@ class TechnicalAnalyzer:
         self.rsi_optimal_low = profile['rsi_optimal_low']
         self.rsi_optimal_high = profile['rsi_optimal_high']
         self.max_distance_from_ma = profile['max_distance_from_ma']
-        self.ma_signal_threshold = profile.get('ma_signal_threshold', 2.0)
         self.bb_condition = profile.get('bb_condition', 'upper_half')
         # Soglia RSI stanchezza (Regola C uscita L1): per money_market è alta perché RSI è strutturalmente 80-90
         self.rsi_exhaustion_threshold = profile.get('rsi_exhaustion_threshold', 75)
@@ -1051,95 +1042,6 @@ class TechnicalAnalyzer:
             'histogram': histogram
         }
     
-    def get_price_vs_ma_signal(self, current_price: float, ma_value: float) -> str:
-        """
-        Determina il segnale basato su prezzo vs media mobile
-        
-        Returns:
-            'BUY' se prezzo > MA (trend rialzista)
-            'SELL' se prezzo < MA (trend ribassista)
-            'HOLD' se dati insufficienti
-        """
-        if ma_value is None or np.isnan(ma_value):
-            return 'HOLD'
-        
-        pct_diff = (current_price - ma_value) / ma_value * 100
-        threshold = self.ma_signal_threshold
-
-        if pct_diff > threshold:
-            return 'BUY'
-        elif pct_diff < -threshold:
-            return 'SELL'
-        else:
-            return 'HOLD'
-    
-    def get_rsi_signal(self, rsi_value: float) -> str:
-        """
-        Determina il segnale basato su RSI
-        
-        Returns:
-            'BUY' se RSI < soglia ipervenduto
-            'SELL' se RSI > soglia ipercomprato
-            'HOLD' altrimenti
-        """
-        if rsi_value is None or np.isnan(rsi_value):
-            return 'HOLD'
-        
-        if rsi_value < self.rsi_oversold:
-            return 'BUY'
-        elif rsi_value > self.rsi_overbought:
-            return 'SELL'
-        else:
-            return 'HOLD'
-    
-    def get_macd_signal(self, macd: float, signal: float, prev_macd: float = None, prev_signal: float = None) -> str:
-        """
-        Determina il segnale basato su MACD
-        
-        Returns:
-            'BUY' se MACD incrocia al rialzo la signal line
-            'SELL' se MACD incrocia al ribasso la signal line
-            'HOLD' altrimenti
-        """
-        if macd is None or signal is None:
-            return 'HOLD'
-        
-        # Se abbiamo dati precedenti, controlliamo l'incrocio
-        if prev_macd is not None and prev_signal is not None:
-            if prev_macd < prev_signal and macd > signal:
-                return 'BUY'  # Incrocio rialzista
-            elif prev_macd > prev_signal and macd < signal:
-                return 'SELL'  # Incrocio ribassista
-        
-        # Altrimenti usiamo la posizione relativa
-        if macd > signal:
-            return 'BUY'
-        elif macd < signal:
-            return 'SELL'
-        
-        return 'HOLD'
-    
-    def get_combined_signal(self, signals: List[str], min_agreement: int = 2) -> Tuple[str, int]:
-        """
-        Combina più segnali per ottenere un segnale finale
-        
-        Args:
-            signals: Lista di segnali ('BUY', 'SELL', 'HOLD')
-            min_agreement: Numero minimo di segnali concordi richiesti
-        
-        Returns:
-            Tupla (segnale_finale, numero_indicatori_concordi)
-        """
-        buy_count = signals.count('BUY')
-        sell_count = signals.count('SELL')
-        
-        if buy_count >= min_agreement:
-            return ('BUY', buy_count)
-        elif sell_count >= min_agreement:
-            return ('SELL', sell_count)
-        else:
-            return ('HOLD', 0)
-    
     def analyze_fund(self, prices: pd.Series, level: int = 3) -> Dict:
         """
         Esegue analisi tecnica completa su un fondo
@@ -1165,8 +1067,6 @@ class TechnicalAnalyzer:
                 'rsi': None,
                 'bollinger': None,
                 'days_above_ma': 0,
-                'final_signal': 'HOLD',
-                'signal_strength': 0,
                 'suggested_level': level,
                 'level_change': False,
                 'level_reason': f'Dati insufficienti: {days_available}/{days_needed} giorni',
@@ -1199,28 +1099,10 @@ class TechnicalAnalyzer:
 
         days_above = self.count_days_above_ma(prices, ma)
 
-        # Segnali per compatibilità
-        ma_signal = self.get_price_vs_ma_signal(current_price, ma_current)
-        rsi_signal = self.get_rsi_signal(rsi_current)
-        signals = [ma_signal, rsi_signal]
-
-        # MACD per livelli 1 e 2
+        # MACD (usato da suggest_level per condizione 6)
         macd_data = None
-        macd_signal = 'HOLD'
-
-        if level <= 2 and len(prices) >= 26:
+        if len(prices) >= 26:
             macd_data = self.calculate_macd(prices)
-            macd_current = macd_data['macd'].iloc[-1]
-            signal_current = macd_data['signal'].iloc[-1]
-
-            prev_macd = macd_data['macd'].iloc[-2] if len(macd_data['macd']) > 1 else None
-            prev_signal = macd_data['signal'].iloc[-2] if len(macd_data['signal']) > 1 else None
-
-            macd_signal = self.get_macd_signal(macd_current, signal_current, prev_macd, prev_signal)
-            signals.append(macd_signal)
-
-        # Segnale combinato
-        final_signal, strength = self.get_combined_signal(signals, min_agreement=2)
 
         # Suggerimento livello automatico
         level_suggestion = self.suggest_level(prices, current_level=level)
@@ -1244,9 +1126,7 @@ class TechnicalAnalyzer:
             'current_price': round(current_price, 4),
             'ma': round(ma_current, 4) if pd.notna(ma_current) else None,
             'ma_slope': round(ma_slope, 3),
-            'ma_signal': ma_signal,
             'rsi': round(rsi_current, 2) if pd.notna(rsi_current) else None,
-            'rsi_signal': rsi_signal,
             'bollinger': {
                 'upper': round(bollinger['upper'].iloc[-1], 4) if pd.notna(bollinger['upper'].iloc[-1]) else None,
                 'middle': round(bollinger['middle'].iloc[-1], 4) if pd.notna(bollinger['middle'].iloc[-1]) else None,
@@ -1260,10 +1140,6 @@ class TechnicalAnalyzer:
                 'signal': round(macd_data['signal'].iloc[-1], 4) if macd_data else None,
                 'histogram': round(macd_data['histogram'].iloc[-1], 4) if macd_data else None
             },
-            'macd_signal': macd_signal,
-            'final_signal': final_signal,
-            'signal_strength': strength,
-            'total_signals': len(signals),
             'suggested_level': level_suggestion['suggested_level'],
             'level_change': level_suggestion['level_change'],
             'level_reason': level_suggestion['reason'],
@@ -1277,38 +1153,6 @@ class TechnicalAnalyzer:
             'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M')
         }
     
-    def get_signal_emoji(self, signal: str) -> str:
-        """Converte segnale in emoji"""
-        if signal == 'BUY':
-            return '🟢'
-        elif signal == 'SELL':
-            return '🔴'
-        else:
-            return '🟡'
-    
-    def format_analysis_summary(self, analysis: Dict, fund_name: str = '') -> str:
-        """Formatta un riassunto dell'analisi per display/email"""
-        emoji = self.get_signal_emoji(analysis['final_signal'])
-        
-        price = analysis.get('current_price')
-        ma = analysis.get('ma')
-        rsi = analysis.get('rsi')
-        pct = analysis.get('pct_from_high_52w')
-
-        summary = f"""
-{emoji} {fund_name}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Prezzo: €{price:.2f if price else 'N/A'}
-MM{self.ma_period}: €{ma:.2f if ma else 'N/A'} ({analysis.get('ma_signal', 'N/A')})
-RSI: {rsi:.1f if rsi else 'N/A'} ({analysis.get('rsi_signal', 'N/A')})
-MACD: {analysis.get('macd_signal', 'N/A')}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SEGNALE: {analysis.get('final_signal', 'N/A')} ({analysis.get('signal_strength', 0)}/{analysis.get('total_signals', 0)} indicatori)
-Distanza da Max 52w: {pct:.1f if pct else 'N/A'}%
-"""
-        return summary
-
-
     @staticmethod
     def calculate_signal_purity(fund_prices: pd.Series, bench_prices: pd.Series,
                                  window: int = 90) -> dict:
@@ -1372,19 +1216,10 @@ Distanza da Max 52w: {pct:.1f if pct else 'N/A'}%
             return {'available': False, 'reason': str(e)}
 
 
-def test_analyzer():
-    """Test dell'analizzatore tecnico"""
+if __name__ == "__main__":
     analyzer = TechnicalAnalyzer()
-    
-    # Genera dati di test
     np.random.seed(42)
     dates = pd.date_range(end=datetime.now(), periods=100, freq='D')
     prices = pd.Series(100 + np.cumsum(np.random.randn(100) * 2), index=dates)
-    
-    # Analizza
     result = analyzer.analyze_fund(prices, level=1)
-    print(analyzer.format_analysis_summary(result, "Test Fund"))
-
-
-if __name__ == "__main__":
-    test_analyzer()
+    print(f"Livello suggerito: {result['suggested_level']} | buy_count: {result['buy_count']} | RSI: {result['rsi']}")

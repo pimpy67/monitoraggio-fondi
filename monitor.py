@@ -332,20 +332,14 @@ class FundMonitor:
                     # RSI (colonna I)
                     ws.cell(row=row, column=COL_RSI, value=analysis.get('rsi'))
 
-                    # Segnale (colonna J)
-                    signal = analysis.get('final_signal', 'HOLD')
-                    signal_cell = ws.cell(row=row, column=COL_SEGNALE, value=signal)
-
-                    # Colora cella segnale
-                    if signal == 'BUY':
-                        signal_cell.fill = PatternFill("solid", fgColor="00B050")
-                        signal_cell.font = Font(bold=True, color="FFFFFF")
-                    elif signal == 'SELL':
-                        signal_cell.fill = PatternFill("solid", fgColor="FF0000")
-                        signal_cell.font = Font(bold=True, color="FFFFFF")
-                    else:
-                        signal_cell.fill = PatternFill("solid", fgColor="FFC000")
-                        signal_cell.font = Font(bold=True)
+                    # Segnale (colonna J) — mostra livello corrente
+                    lv = suggested_level
+                    lv_label = f"L{lv}"
+                    lv_colors = {0: ("E65100", "FFFFFF"), 1: ("00B050", "FFFFFF"), 2: ("FFC000", "333333"), 3: ("6C7A8D", "FFFFFF")}
+                    bg, fg = lv_colors.get(lv, ("6C7A8D", "FFFFFF"))
+                    signal_cell = ws.cell(row=row, column=COL_SEGNALE, value=lv_label)
+                    signal_cell.fill = PatternFill("solid", fgColor=bg)
+                    signal_cell.font = Font(bold=True, color=fg)
 
                     # Ultima Modifica (colonna K)
                     ws.cell(row=row, column=COL_ULTIMA_MODIFICA, value=datetime.now().strftime('%Y-%m-%d %H:%M'))
@@ -399,9 +393,6 @@ class FundMonitor:
         }
         
         for r in results:
-            signal = r['analysis'].get('final_signal', 'HOLD')
-            # Usa il livello aggiornato (suggested_level) se è cambiato,
-            # così i fondi promossi/declassati appaiono nel bucket corretto
             level = r['analysis'].get('suggested_level', r['livello'])
             category = r['categoria']
             
