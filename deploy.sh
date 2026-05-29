@@ -46,3 +46,4 @@ ssh -i "$SSH_KEY" "$VPS" "until curl -sf http://localhost:5000/api/health > /dev
 echo ""
 echo "Deploy completato. Dashboard: https://fondi.andreapavan.tech"
 echo "Il monitor sta girando in background (~10 min). Poi ricarica la dashboard."
+

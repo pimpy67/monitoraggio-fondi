@@ -382,9 +382,12 @@ class FundMonitor:
             'last_update': datetime.now().isoformat(),
             'summary': {
                 'total_funds': len(results),
-                'buy_signals': 0,
-                'sell_signals': 0,
-                'hold_signals': 0,
+                'l0_count': 0,
+                'l1_count': 0,
+                'l2_count': 0,
+                'l3_count': 0,
+                'l1_candidates': 0,  # fondi L2 con 6/6 condizioni L1 soddisfatte
+                'new_l1_today': 0,   # ingressi in L1 in questo run
                 'alerts_sent': send_daily_report,
             },
             'levels': {
@@ -402,13 +405,22 @@ class FundMonitor:
             level = r['analysis'].get('suggested_level', r['livello'])
             category = r['categoria']
             
-            # Conteggio segnali
-            if signal == 'BUY':
-                dashboard_data['summary']['buy_signals'] += 1
-            elif signal == 'SELL':
-                dashboard_data['summary']['sell_signals'] += 1
+            # Conteggio per livello
+            if level == 1:
+                dashboard_data['summary']['l1_count'] += 1
+            elif level == 2:
+                dashboard_data['summary']['l2_count'] += 1
             else:
-                dashboard_data['summary']['hold_signals'] += 1
+                dashboard_data['summary']['l3_count'] += 1
+
+            # Candidati L1: fondi in L2 con tutte 6 condizioni soddisfatte
+            buy_count_val = int(r['analysis'].get('buy_count', 0))
+            if level == 2 and buy_count_val == 6:
+                dashboard_data['summary']['l1_candidates'] += 1
+
+            # Nuovi ingressi in L1 oggi
+            if r['livello'] != 1 and level == 1:
+                dashboard_data['summary']['new_l1_today'] += 1
             
             # Recupera prezzo di ieri dal database
             price_today = r['analysis'].get('current_price')
@@ -515,6 +527,7 @@ class FundMonitor:
                     'days_in_l0': days_in_l0,
                 })
             dashboard_data['l0_funds'] = l0_list
+            dashboard_data['summary']['l0_count'] = len(l0_list)
         except Exception as e:
             dashboard_data['l0_funds'] = []
             print(f"Errore caricamento L0 per dashboard: {e}")
@@ -1105,7 +1118,7 @@ class FundMonitor:
             # Genera dashboard minima per non bloccare tutto
             dashboard_data = {
                 'last_update': datetime.now().isoformat(),
-                'summary': {'total_funds': len(results), 'buy_signals': 0, 'sell_signals': 0, 'hold_signals': 0},
+                'summary': {'total_funds': len(results), 'l0_count': 0, 'l1_count': 0, 'l2_count': 0, 'l3_count': 0, 'l1_candidates': 0, 'new_l1_today': 0},
                 'levels': {1: [], 2: [], 3: []},
                 'categories': {}
             }

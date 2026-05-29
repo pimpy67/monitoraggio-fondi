@@ -15,11 +15,15 @@
         .summary-bar { display: flex; gap: 12px; align-items: center; }
         .summary-item { display: flex; align-items: center; gap: 4px; font-size: 0.85em; }
         .summary-item .number { font-weight: bold; font-size: 1.1em; }
-        .summary-item.buy .number { color: #00B050; }
-        .summary-item.sell .number { color: #DC3545; }
-        .summary-item.hold .number { color: #FFC000; }
         .summary-item.total .number { color: #4472C4; }
+        .summary-item.lv0 .number { color: #FF8F00; }
+        .summary-item.lv1 .number { color: #00B050; }
+        .summary-item.lv2 .number { color: #FFC000; }
+        .summary-item.lv3 .number { color: #6c7a8d; }
+        .summary-item.candidate .number { color: #00D4AA; }
+        .summary-item.newin .number { color: #69f0ae; }
         .summary-item .label { color: #aaa; font-size: 0.8em; }
+        .summary-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.15); margin: 0 2px; }
         .container { max-width: 1400px; margin: 0 auto; padding: 15px 20px; }
         .level-section { background: rgba(255,255,255,0.05); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
         .level-header { padding: 12px 20px; font-weight: bold; display: flex; justify-content: space-between; }
@@ -370,9 +374,14 @@
             <h1>Fund Monitor</h1>
             <div class="summary-bar">
                 <div class="summary-item total"><span class="number" id="totalFunds">-</span><span class="label">Totali</span></div>
-                <div class="summary-item buy"><span class="number" id="buySignals">-</span><span class="label">BUY</span></div>
-                <div class="summary-item hold"><span class="number" id="holdSignals">-</span><span class="label">HOLD</span></div>
-                <div class="summary-item sell"><span class="number" id="sellSignals">-</span><span class="label">SELL</span></div>
+                <div class="summary-sep"></div>
+                <div class="summary-item lv0"><span class="number" id="l0Count">-</span><span class="label">L0</span></div>
+                <div class="summary-item lv1"><span class="number" id="l1Count">-</span><span class="label">L1</span></div>
+                <div class="summary-item lv2"><span class="number" id="l2Count">-</span><span class="label">L2</span></div>
+                <div class="summary-item lv3"><span class="number" id="l3Count">-</span><span class="label">L3</span></div>
+                <div class="summary-sep"></div>
+                <div class="summary-item candidate"><span class="number" id="l1Candidates">-</span><span class="label">Candidati L1</span></div>
+                <div class="summary-item newin"><span class="number" id="newL1Today">-</span><span class="label">Ingressi oggi</span></div>
             </div>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
@@ -1080,9 +1089,12 @@
             }
 
             document.getElementById('totalFunds').textContent = allData.summary.total_funds;
-            document.getElementById('buySignals').textContent = allData.summary.buy_signals;
-            document.getElementById('holdSignals').textContent = allData.summary.hold_signals;
-            document.getElementById('sellSignals').textContent = allData.summary.sell_signals;
+            document.getElementById('l0Count').textContent = allData.summary.l0_count ?? 0;
+            document.getElementById('l1Count').textContent = allData.summary.l1_count ?? 0;
+            document.getElementById('l2Count').textContent = allData.summary.l2_count ?? 0;
+            document.getElementById('l3Count').textContent = allData.summary.l3_count ?? 0;
+            document.getElementById('l1Candidates').textContent = allData.summary.l1_candidates ?? 0;
+            document.getElementById('newL1Today').textContent = allData.summary.new_l1_today ?? 0;
 
             // Category filters (sidebar destra)
             const categories = Object.keys(allData.categories || {});
