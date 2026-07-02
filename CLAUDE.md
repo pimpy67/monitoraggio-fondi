@@ -217,9 +217,16 @@ Tutti gli ETF partono da qui. Nessuna condizione richiesta.
 |-----------|--------|--------|
 | **Regime BULL** | regime_str deve essere "BULL" (non LATERALE/BEAR) | Se regime ≠ BULL → L2 |
 | **Prezzo > SMA50** | price deve stare sopra SMA50 (allineamento assoluto) | Se price < SMA50 → L2 |
-| **EMA20 Slope >= 0.2%** ⬇️ | EMA20 deve crescere almeno 0.2% su 10 giorni (trend lento ma REALE) | Se slope < 0.2% → L2 |
+| **EMA20 Slope >= X%** ⬇️ | EMA20 deve crescere di X% su 10 giorni (PARAMETRIZZATO per famiglia) | Se slope < soglia → L2 |
 
-> **STRATO 2 — Filtro EMA20 slope (FINAL)**: Esclude trend piatti/artificiali senza eliminare trend lenti. Soglia **+0.2%/10gg** è l'equilibrio perfetto. **Risultato finale: 92 L1 → 10 L1** (92% falsi segnali eliminati). ✅
+> **STRATO 2 — Filtro EMA20 slope (PARAMETRIZZATO per famiglia)**: Esclude trend piatti/artificiali. Soglie specifiche per asset class:
+> - **Equity**: 0.4-0.5% (richiedono momentum sostenuto)
+> - **Bond**: 0.1-0.15% (accettano crescita lenta)
+> - **Commodity**: 0.3% (volatilità moderata)
+> - **Crypto/Leva**: 0.5-0.6% (altamente volatile)
+> - **Money Market**: 0.0% (no slope check)
+>
+> **Risultato finale: 92 L1 → 10 L1** (92% falsi segnali eliminati). ✅
 
 ### Profili parametri FAMIGLIE ETF (v2 — AGGIORNATO 02/07/2026)
 
