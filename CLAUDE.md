@@ -209,6 +209,18 @@ Tutti gli ETF partono da qui. Nessuna condizione richiesta.
 
 > **Blocco ingresso L1**: Kill Switch attivo (calo giornaliero ≤ −3%) → ingresso bloccato anche se tutte le 6 condizioni sono vere.
 
+### FONDAMENTA IRRINUNCIABILI (aggiunto 02/07/2026)
+
+**Tre fondamenta che bloccano L1 anche se 6/6 condizioni sono vere:**
+
+| Fondamenta | Logica | Azione |
+|-----------|--------|--------|
+| **Regime BULL** | regime_str deve essere "BULL" (non LATERALE/BEAR) | Se regime ≠ BULL → L2 |
+| **Prezzo > SMA50** | price deve stare sopra SMA50 (allineamento assoluto) | Se price < SMA50 → L2 |
+| **EMA20 Slope >= 0.5%** | EMA20 deve crescere almeno 0.5% su 10 giorni (trend reale) | Se slope < 0.5% → L2 |
+
+> **STRATO 2 — Filtro EMA20 slope**: Esclude trend piatti, artificiali, o con bassa pendenza. L'EMA20 deve accelerare (almeno +0.5% ogni 10 giorni) per considerare il trend "vero". Questo elimina i falsi segnali da medie incrociate senza momentum sostenuto.
+
 ### Profili parametri FAMIGLIE ETF (v2 — AGGIORNATO 02/07/2026)
 
 **⚠️ FONTE AUTOREVOLE: `config/etf_families.yaml`** — La seguente tabella è sincronizzata al YAML e DEVE essere aggiornata ogni volta che cambiano i parametri nel codice.
