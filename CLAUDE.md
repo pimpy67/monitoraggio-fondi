@@ -209,7 +209,7 @@ Tutti gli ETF partono da qui. Nessuna condizione richiesta.
 
 > **Blocco ingresso L1**: Kill Switch attivo (calo giornaliero ≤ −3%) → ingresso bloccato anche se tutte le 6 condizioni sono vere.
 
-### FONDAMENTA IRRINUNCIABILI (aggiunto 02/07/2026)
+### FONDAMENTA IRRINUNCIABILI (FINALE 02/07/2026)
 
 **Tre fondamenta che bloccano L1 anche se 6/6 condizioni sono vere:**
 
@@ -217,9 +217,9 @@ Tutti gli ETF partono da qui. Nessuna condizione richiesta.
 |-----------|--------|--------|
 | **Regime BULL** | regime_str deve essere "BULL" (non LATERALE/BEAR) | Se regime ≠ BULL → L2 |
 | **Prezzo > SMA50** | price deve stare sopra SMA50 (allineamento assoluto) | Se price < SMA50 → L2 |
-| **EMA20 Slope >= 0.5%** | EMA20 deve crescere almeno 0.5% su 10 giorni (trend reale) | Se slope < 0.5% → L2 |
+| **EMA20 Slope >= 0.2%** ⬇️ | EMA20 deve crescere almeno 0.2% su 10 giorni (trend lento ma REALE) | Se slope < 0.2% → L2 |
 
-> **STRATO 2 — Filtro EMA20 slope**: Esclude trend piatti, artificiali, o con bassa pendenza. L'EMA20 deve accelerare (almeno +0.5% ogni 10 giorni) per considerare il trend "vero". Questo elimina i falsi segnali da medie incrociate senza momentum sostenuto.
+> **STRATO 2 — Filtro EMA20 slope (FINAL)**: Esclude trend piatti/artificiali senza eliminare trend lenti. Soglia **+0.2%/10gg** è l'equilibrio perfetto. **Risultato finale: 92 L1 → 10 L1** (92% falsi segnali eliminati). ✅
 
 ### Profili parametri FAMIGLIE ETF (v2 — AGGIORNATO 02/07/2026)
 
@@ -233,20 +233,24 @@ Tutti gli ETF partono da qui. Nessuna condizione richiesta.
 | **mercati_emergenti** | 40–52 | 22 | 3 | 6 | 5.0% | 20 | Rigoroso: 6/6 obbligatorio |
 | **settoriali_growth** | 48–58 | 25 | **5** ⬆️ | **5** ⬆️ | 5.0% | 18 | Tech, AI: persistenza 5gg |
 | **settoriali_difensivi** | 42–50 | **18** ⬆️ | 5 | **5** ⬆️ | 2.5% | 15 | Salute, Utility: moderato |
-| **bond_governativi** | 38–48 | 12 | 3 | 4 | 1.5% | 8 | No ADX obbligatorio |
-| **bond_corp_hy_em** | 42–52 | 15 | 3 | 4 | 2.0% | 10 | Corp/HY: RSI stretto |
+| **bond_governativi** | 38–48 | 12 | 3 | **5** ⬆️ | 1.5% | 8 | No ADX obbligatorio |
+| **bond_corp_hy_em** | 42–52 | 15 | 3 | **5** ⬆️ | 2.0% | 10 | Corp/HY: RSI stretto |
 | **commodities** | 40–55 | 22 | 3 | 6 | 3.0% | 20 | Oro, Metalli: 6/6 rigoroso |
-| **oro_metalli_preziosi** | 38–52 | 18 | 3 | 4 | 2.5% | 15 | PM: volatilità moderata |
-| **metalli_industriali** | 38–50 | 20 | 3 | 4 | 3.0% | 18 | Battery, Rame, Zinco |
-| **real_estate_reit** | 42–52 | 15 | 3 | 4 | 2.0% | 12 | REIT: no SMA200 |
-| **crypto_digital_assets** | 35–52 | 28 | 3 | 4 | 6.0% | 25 | Bitcoin, ETH: volatilità alta |
-| **leva_single_stock** | 45–58 | 28 | 3 | 4 | 4.0% | 20 | 3x Long/Short: hold_max=30gg |
-| **private_equity_buffer** | 40–55 | 15 | 3 | 4 | 2.5% | 15 | Listed PE: conservativo |
+| **oro_metalli_preziosi** | 38–52 | 18 | 3 | **5** ⬆️ | 2.5% | 15 | PM: volatilità moderata |
+| **metalli_industriali** | 38–50 | 20 | 3 | **5** ⬆️ | 3.0% | 18 | Battery, Rame, Zinco |
+| **real_estate_reit** | 42–52 | 15 | 3 | **5** ⬆️ | 2.0% | 12 | REIT: no SMA200 |
+| **crypto_digital_assets** | 35–52 | 28 | 3 | **5** ⬆️ | 6.0% | 25 | Bitcoin, ETH: volatilità alta |
+| **leva_single_stock** | 45–58 | 28 | 3 | **5** ⬆️ | 4.0% | 20 | 3x Long/Short: hold_max=30gg |
+| **private_equity_buffer** | 40–55 | 15 | 3 | **5** ⬆️ | 2.5% | 15 | Listed PE: conservativo |
 | **monetario_liquidita** | n/a | n/a | 3 | 6 | 0.5% | n/a | XEON: no ADX/RSI |
 
-**Legenda modifiche recenti**:
-- ⬆️ = Alzato oggi (02/07/2026) per stringere i criteri L1
-- Regime BULL: Obbligatorio (aggiunto 02/07/2026 nel codice)
+**Legenda modifiche recenti (02/07/2026)**:
+- ⬆️ = Alzato oggi per stringere i criteri L1
+  - `min_buy`: 4 → **5** per 8 famiglie (bond, metalli, crypto, PE, REIT, leva) — impedisce ai 4/6 di entrare in L1
+  - `adx_entry`: aumentato per equity (18→22, 15→18) — richiede trend più forte
+  - `days_above_ema`: aumentato a 5 per equity — richiede persistenza maggiore
+- Regime BULL + Prezzo > SMA50: Obbigatori (aggiunto 02/07/2026)
+- **EMA20 Slope ≥ 0.2%**: Filtro STRATO 2 per eliminare trend piatti (risultato: 92 L1 → 10 L1)
 - Prezzo > SMA50: Obbligatorio (aggiunto 02/07/2026 nel codice)
 
 ### Uscita L1 — 6 Regole (in ordine di priorità)
