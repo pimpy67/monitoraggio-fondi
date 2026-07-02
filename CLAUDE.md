@@ -2,6 +2,8 @@
 
 Documento di riferimento tecnico per il progetto. Caricato automaticamente a ogni sessione.
 
+> ⚠️ **REGOLA DI SINCRONIZZAZIONE**: Ogni volta che cambiano i parametri nel codice (YAML, technical_analysis.py, monitor.py), **DEVI aggiornare contemporaneamente** le tabelle in questa documentazione (sezione "PARAMETRI DI RIFERIMENTO - PROFILI E REGOLE"). Le due fonti devono coincidere SEMPRE.
+
 ---
 
 ## Infrastruttura VPS
@@ -207,17 +209,33 @@ Tutti gli ETF partono da qui. Nessuna condizione richiesta.
 
 > **Blocco ingresso L1**: Kill Switch attivo (calo giornaliero ≤ −3%) → ingresso bloccato anche se tutte le 6 condizioni sono vere.
 
-### Profili parametri per asset type (ETF)
+### Profili parametri FAMIGLIE ETF (v2 — AGGIORNATO 02/07/2026)
 
-| Parametro | equity_developed | equity_sector | equity_emerging | commodity | bond | thematic |
-|-----------|:---:|:---:|:---:|:---:|:---:|:---:|
-| RSI entry range | 50–70 | 50–70 | 50–65 | 50–65 | 48–62 | 50–70 |
-| Distanza max EMA20 | 4% | 5% | 5% | 5% | 2% | 6% |
-| ADX entrata (min) | 20 | 22 | 20 | 22 | 15 | 22 |
-| Giorni sopra EMA20 | 3 | 3 | 3 | 3 | 3 | 3 |
-| SMA200 filter | True | True | True | **True** | False | True |
-| l0_drawdown | 15% | 18% | 20% | 20% | 8% | 20% |
-| l0_rsi_max | 35 | 38 | 38 | 40 | 38 | 40 |
+**⚠️ FONTE AUTOREVOLE: `config/etf_families.yaml`** — La seguente tabella è sincronizzata al YAML e DEVE essere aggiornata ogni volta che cambiano i parametri nel codice.
+
+> Nota: Questo si sostituisce alla vecchia versione "asset type" (equity_developed, commodity, ecc.) che è deprecated. Le famiglie qui sotto sono la base per la classificazione moderna.
+
+| Famiglia | RSI Low–High | ADX entry | days_ema | min_buy | ema_dist_max | l0_dd % | Note |
+|----------|:---:|:---:|:---:|:---:|:---:|:---:|------|
+| **equity_sviluppati** | 45–55 | **22** ⬆️ | **5** ⬆️ | **5** ⬆️ | 4.0% | 15 | Stringente: trend FORTE |
+| **mercati_emergenti** | 40–52 | 22 | 3 | 6 | 5.0% | 20 | Rigoroso: 6/6 obbligatorio |
+| **settoriali_growth** | 48–58 | 25 | **5** ⬆️ | **5** ⬆️ | 5.0% | 18 | Tech, AI: persistenza 5gg |
+| **settoriali_difensivi** | 42–50 | **18** ⬆️ | 5 | **5** ⬆️ | 2.5% | 15 | Salute, Utility: moderato |
+| **bond_governativi** | 38–48 | 12 | 3 | 4 | 1.5% | 8 | No ADX obbligatorio |
+| **bond_corp_hy_em** | 42–52 | 15 | 3 | 4 | 2.0% | 10 | Corp/HY: RSI stretto |
+| **commodities** | 40–55 | 22 | 3 | 6 | 3.0% | 20 | Oro, Metalli: 6/6 rigoroso |
+| **oro_metalli_preziosi** | 38–52 | 18 | 3 | 4 | 2.5% | 15 | PM: volatilità moderata |
+| **metalli_industriali** | 38–50 | 20 | 3 | 4 | 3.0% | 18 | Battery, Rame, Zinco |
+| **real_estate_reit** | 42–52 | 15 | 3 | 4 | 2.0% | 12 | REIT: no SMA200 |
+| **crypto_digital_assets** | 35–52 | 28 | 3 | 4 | 6.0% | 25 | Bitcoin, ETH: volatilità alta |
+| **leva_single_stock** | 45–58 | 28 | 3 | 4 | 4.0% | 20 | 3x Long/Short: hold_max=30gg |
+| **private_equity_buffer** | 40–55 | 15 | 3 | 4 | 2.5% | 15 | Listed PE: conservativo |
+| **monetario_liquidita** | n/a | n/a | 3 | 6 | 0.5% | n/a | XEON: no ADX/RSI |
+
+**Legenda modifiche recenti**:
+- ⬆️ = Alzato oggi (02/07/2026) per stringere i criteri L1
+- Regime BULL: Obbligatorio (aggiunto 02/07/2026 nel codice)
+- Prezzo > SMA50: Obbligatorio (aggiunto 02/07/2026 nel codice)
 
 ### Uscita L1 — 6 Regole (in ordine di priorità)
 
