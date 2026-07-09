@@ -327,8 +327,76 @@ Se variazione giornaliera ≤ −3%: nuovi ingressi L0 e L1 bloccati; uscite sem
 - **ADX14** (da dati OHLCV reali) — forza direzionale
 - **MACD** (12,26,9) — momentum condizione 6 entrata
 
----
+### Stop Loss Iniziale — Regole Esplicite per Famiglia (NUOVO 2026-07-09)
 
+Ogni famiglia ETF ha un parametro **`sl_initial_pct`** nel YAML: la perdita massima tollerata all'entry di una posizione L1.
+
+Formula: `stop_loss_initial = entry_price × (1 − sl_initial_pct)`
+
+**Calibrazione per profilo di rischio** (dal YAML `config/etf_families.yaml`):
+
+| Famiglia | sl_initial_pct | Profilo | Entry €100 → SL |
+|----------|:---:|----------|-----------|
+| **monetario_liquidita** | 1.0% | Protezione black swan | €99.00 |
+| **bond_governativi** | 2.5% | Conservativo | €97.50 |
+| **bond_corp_hy_em** | 3.0% | Conservativo | €97.00 |
+| **settoriali_difensivi** | 4.0% | Moderato-conserv | €96.00 |
+| **real_estate_reit** | 3.5% | Moderato-conserv | €96.50 |
+| **private_equity_buffer** | 3.5% | Moderato-conserv | €96.50 |
+| **equity_sviluppati** | 5.0% | Moderato | €95.00 |
+| **oro_metalli_preziosi** | 5.0% | Moderato | €95.00 |
+| **mercati_emergenti** | 6.0% | Moderato-alto | €94.00 |
+| **settoriali_growth** | 6.0% | Moderato-alto | €94.00 |
+| **metalli_industriali** | 6.0% | Moderato-alto | €94.00 |
+| **commodities** | 7.0% | Alto | €93.00 |
+| **leva_single_stock** | 8.0% | Molto alto | €92.00 |
+| **crypto_digital_assets** | 12.0% | Ultra volatile | €88.00 |
+
+**Implementazione nel codice**:
+- `technical_analysis.py::calculate_stop_loss()` legge `sl_initial_pct` come primo passo
+- Calcola: `sl_initial = entry_price × (1 − sl_initial_pct)`
+- Con protezione minima: `sl_initial = max(sl_initial, entry_price × 0.95)` (non scendere oltre il 95%)
+- Salvato nel DB come `stop_loss_suggested` per il portafoglio personale
+
+### Stop Loss Dinamico — Trailing Levels (NUOVO 2026-07-09)
+
+Ogni famiglia ETF ha **`trailing_levels`** nel file YAML: regole progressive che proteggono i profitti senza "regalare" i guadagni.
+
+**Logica**: Man mano che il prezzo sale (guadagni %), lo stop loss si stringe progressivamente (sempre calcolato sul prezzo corrente, non sull'entry).
+
+```yaml
+trailing_levels:
+  - gain_threshold: 5.0        # Se guadagni >= 5%
+    trailing_pct: 0.96         # SL = price × 0.96
+  - gain_threshold: 10.0       # Se guadagni >= 10%
+    trailing_pct: 0.95         # SL = price × 0.95
+  - gain_threshold: 15.0       # Se guadagni >= 15%
+    trailing_pct: 0.94         # SL = price × 0.94
+```
+
+**Esempio pratico (Equity Sviluppati)**:
+- Entri a €100, guadagni 0% → SL = €95 (initial percentage)
+- Prezzo sale a €107 (+7%) → SL = €107 × 0.96 = €102.72 (tier 1)
+- Prezzo sale a €115 (+15%) → SL = €115 × 0.94 = €108.10 (tier 3)
+- Pullback a €113 (+13%) → SL = €113 × 0.95 = €107.35 (back to tier 2)
+
+**Calibrazione per asset class** (dal YAML `config/etf_families.yaml`):
+
+| Famiglia | Tier 1 | Tier 2 | Tier 3 | Note |
+|----------|:---:|:---:|:---:|-------|
+| bond_governativi | 2%→0.98 | 4%→0.97 | 7%→0.96 | Molto stretto |
+| settoriali_difensivi | 3%→0.97 | 7%→0.96 | 12%→0.94 | Stretto |
+| equity_sviluppati | 5%→0.96 | 10%→0.95 | 15%→0.94 | Moderato |
+| mercati_emergenti | 5%→0.97 | 12%→0.95 | 20%→0.93 | Ampio |
+| commodities | 5%→0.97 | 12%→0.95 | 20%→0.92 | Molto ampio |
+| crypto_digital_assets | 8%→0.96 | 15%→0.94 | 25%→0.92 | Massimamente ampio |
+
+**Implementazione nel codice**:
+- `technical_analysis.py::calculate_stop_loss()` legge `trailing_levels` e applica il tier corretto in base al `current_gain_pct`
+- Ogni giorno il monitor recalcola il trailing SL con il prezzo attuale
+- `app.py /api/parameters` espone i trailing_levels per la dashboard
+
+---
 ## Schema Livelli Fondi (L0 / L1 / L2 / L3)
 
 ### L3 — Universe (monitoraggio passivo)
