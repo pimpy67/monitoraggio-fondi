@@ -358,21 +358,40 @@ Formula: `stop_loss_initial = entry_price × (1 − sl_initial_pct)`
 - Con protezione minima: `sl_initial = max(sl_initial, entry_price × 0.95)` (non scendere oltre il 95%)
 - Salvato nel DB come `stop_loss_suggested` per il portafoglio personale
 
-### Stop Loss Dinamico — Trailing Levels (NUOVO 2026-07-09)
+### Stop Loss Dinamico — Trailing Continuo (NUOVO 2026-07-09)
 
-Ogni famiglia ETF ha **`trailing_levels`** nel file YAML: regole progressive che proteggono i profitti senza "regalare" i guadagni.
+Ogni famiglia ETF ha **parametri di trailing continuo** nel file YAML che proteggono i profitti con una formula lineare progressiva (non tier discreti).
 
-**Logica**: Man mano che il prezzo sale (guadagni %), lo stop loss si stringe progressivamente (sempre calcolato sul prezzo corrente, non sull'entry).
+**Logica**: La distanza SL si riduce gradualmente man mano che i guadagni crescono, seguendo una retta continua senza salti rigidi.
 
-```yaml
-trailing_levels:
-  - gain_threshold: 5.0        # Se guadagni >= 5%
-    trailing_pct: 0.96         # SL = price × 0.96
-  - gain_threshold: 10.0       # Se guadagni >= 10%
-    trailing_pct: 0.95         # SL = price × 0.95
-  - gain_threshold: 15.0       # Se guadagni >= 15%
-    trailing_pct: 0.94         # SL = price × 0.94
+**Formula**: 
 ```
+distance = max(trailing_base_pct - (excess_gain × trailing_sensitivity), min_distance)
+SL_percent = 1.0 - distance
+```
+
+**Parametri per famiglia**:
+```yaml
+trailing_gain_threshold: 3.0    # Attiva a +3% guadagno
+trailing_base_pct: 0.08         # Distanza iniziale: 8%
+trailing_sensitivity: 0.005     # Riduce di 0.5% per 1% di guadagno
+trailing_min_pct: 0.94          # Min SL 94% (distanza min 6%)
+```
+
+**Esempi pratici** (Entry €100):
+
+| Guadagno | equity_sviluppati | bond_governativi | crypto |
+|:---:|:---:|:---:|:---:|
+| 0% | €92 (8% dist) | €96.50 (3.5%) | €82 (18%) |
+| +3% | €94.76 (8% dist) | €97.95 (3.5%) | €86.10 (18%) |
+| +8% | €101.52 (6% dist) | €103.30 (3%) | €91.30 (17%) |
+| +20% | €110.92 (6% dist) | €113.00 (3%) | €100.80 (16%) |
+
+**Vantaggi sulla versione a tier**:
+- Nessun "salto" rigido ai threshold → evita whipsaw su oscillazioni marginali
+- Formula continua → segue il price action naturalmente
+- Immune al rumore di mercato → non attiva/disattiva per ±0.1% variazioni
+- Ancora con floor → protezione minima garantita (trailing_min_pct)
 
 **Esempio pratico (Equity Sviluppati)**:
 - Entri a €100, guadagni 0% → SL = €95 (initial percentage)
