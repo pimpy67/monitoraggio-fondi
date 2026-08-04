@@ -194,39 +194,36 @@ Tutti gli ETF partono da qui. Nessuna condizione richiesta.
 - Prezzo sopra EMA20 da ≥ 3 giorni consecutivi
 - OPPURE: EMA20 > SMA50 (allineamento parziale)
 
-### L1 — Core Portfolio ("Trend Sicuro") — 6 condizioni TUTTE obbligatorie
+### L1 — Core Portfolio ("Trend Sicuro") — 7 condizioni TUTTE obbligatorie (dal 22/07/2026)
 
 | # | Condizione | Logica |
 |---|-----------|--------|
-| 1 | **Allineamento** | price > EMA20 > SMA50 (+ price > SMA200 se mm200_filter=True per asset class) |
-| 2 | **Persistenza** | days_above_EMA20 ≥ 3 AND slope(EMA20) > 0 |
+| 1 | **Allineamento** | price > EMA20 > SMA50 (+ price > SMA200 se mm200_filter=True per asset class) — puramente geometrico dal fix 04/08/2026 |
+| 2 | **Persistenza** | days_above_EMA20 ≥ N (per famiglia, oggi 3 per tutte) AND slope(EMA20) > 0 |
 | 3 | **RSI ottimale** | rsi_entry_low ≤ RSI ≤ rsi_entry_high (vedi profili sotto) |
 | 4 | **Distanza EMA20** | 0% ≤ dist_EMA20 ≤ dist_max (non troppo esteso) |
 | 5 | **ADX** | ADX ≥ adx_entry (forza trend, vedi profili sotto) |
 | 6 | **MACD momentum** | macd_h > 0 AND (macd_h > macd_h_prev OR dist_EMA20 < 2.0%) |
+| 7 | **Spazio Residuo** | distanza da resistenza (max ultimi N gg) OR ATR×mult ≥ min_reward_pct (per famiglia) |
 
 > **Condizione 6 (MACD)**: blocca ingressi quando EMA20 è ancora positiva per inerzia ma il momentum è già esaurito. Il secondo ramo (dist < 2%) cattura i buy-the-dip vicini all'EMA20 anche con MACD in leggero plateau.
+> **Condizione 7 (Spazio Residuo, aggiunta 22/07/2026)**: evita di comprare a ridosso di una resistenza, senza margine di guadagno prima del prossimo ostacolo tecnico.
 
-> **Blocco ingresso L1**: Kill Switch attivo (calo giornaliero ≤ −3%) → ingresso bloccato anche se tutte le 6 condizioni sono vere.
+> **Blocco ingresso L1**: `min_buy_count: 7` per **tutte** le 14 famiglie, zero tolleranza — se anche una sola delle 7 è falsa, ingresso bloccato (non esiste più una soglia "5/6" o "6/7"). Kill Switch attivo (calo giornaliero ≤ −3%) blocca comunque anche a 7/7.
 
-### FONDAMENTA IRRINUNCIABILI (FINALE 02/07/2026)
+### FONDAMENTA IRRINUNCIABILI (aggiornate 04/08/2026)
 
-**Tre fondamenta che bloccano L1 anche se 6/6 condizioni sono vere:**
+**Verificate solo dopo il 7/7, bloccano l'ingresso anche se tutte le 7 condizioni sono vere:**
 
 | Fondamenta | Logica | Azione |
 |-----------|--------|--------|
-| **Regime BULL** | regime_str deve essere "BULL" (non LATERALE/BEAR) | Se regime ≠ BULL → L2 |
+| **Regime BULL** | `(EMA20 − SMA50) / SMA50 > lateral_band` (soglia per famiglia) | Se regime ≠ BULL → L2 |
 | **Prezzo > SMA50** | price deve stare sopra SMA50 (allineamento assoluto) | Se price < SMA50 → L2 |
-| **EMA20 Slope >= X%** ⬇️ | EMA20 deve crescere di X% su 10 giorni (PARAMETRIZZATO per famiglia) | Se slope < soglia → L2 |
+| **No Kill Switch** | calo giornaliero > −3% | Se kill switch attivo → resta al livello attuale |
 
-> **STRATO 2 — Filtro EMA20 slope (PARAMETRIZZATO per famiglia)**: Esclude trend piatti/artificiali. Soglie specifiche per asset class:
-> - **Equity**: 0.4-0.5% (richiedono momentum sostenuto)
-> - **Bond**: 0.1-0.15% (accettano crescita lenta)
-> - **Commodity**: 0.3% (volatilità moderata)
-> - **Crypto/Leva**: 0.5-0.6% (altamente volatile)
-> - **Money Market**: 0.0% (no slope check)
+> **Fix 04/08/2026**: prima il check regime era incorporato ANCHE dentro la condizione 1 (Allineamento), rendendola un doppio controllo mascherato — e mancava il ramo che assegna `L1` quando tutte le fondamenta passano (bug mai emerso perché nessun ETF aveva mai raggiunto 7/7 fino ad allora). Ora la condizione 1 è puramente geometrica e il regime si verifica una sola volta, qui.
 >
-> **Risultato finale: 92 L1 → 10 L1** (92% falsi segnali eliminati). ✅
+> **`ema20_slope_min` (parametro per famiglia nello YAML) è MORTO** — non è collegato a nessun controllo nel codice attuale. La condizione 2 (Persistenza) verifica solo `slope(EMA20) > 0`, senza soglia minima. La cifra "92 L1 → 10 L1" sotto si riferisce a un'implementazione precedente (STRATO 2, ora superata dalle 7 condizioni + fondamenta).
 
 ### Profili parametri FAMIGLIE ETF (v2 — AGGIORNATO 02/07/2026)
 
@@ -236,70 +233,62 @@ Tutti gli ETF partono da qui. Nessuna condizione richiesta.
 
 | Famiglia | RSI Low–High | ADX entry | days_ema | min_buy | ema_dist_max | l0_dd % | Note |
 |----------|:---:|:---:|:---:|:---:|:---:|:---:|------|
-| **equity_sviluppati** | 45–55 | **22** ⬆️ | **5** ⬆️ | **5** ⬆️ | 4.0% | 15 | Stringente: trend FORTE |
-| **mercati_emergenti** | 40–52 | 22 | 3 | 6 | 5.0% | 20 | Rigoroso: 6/6 obbligatorio |
-| **settoriali_growth** | 48–58 | 25 | **5** ⬆️ | **5** ⬆️ | 5.0% | 18 | Tech, AI: persistenza 5gg |
-| **settoriali_difensivi** | 42–50 | **18** ⬆️ | 5 | **5** ⬆️ | 2.5% | 15 | Salute, Utility: moderato |
-| **bond_governativi** | 38–48 | 12 | 3 | **5** ⬆️ | 1.5% | 8 | No ADX obbligatorio |
-| **bond_corp_hy_em** | 42–52 | 15 | 3 | **5** ⬆️ | 2.0% | 10 | Corp/HY: RSI stretto |
-| **commodities** | 40–55 | 22 | 3 | 6 | 3.0% | 20 | Oro, Metalli: 6/6 rigoroso |
-| **oro_metalli_preziosi** | 38–52 | 18 | 3 | **5** ⬆️ | 2.5% | 15 | PM: volatilità moderata |
-| **metalli_industriali** | 38–50 | 20 | 3 | **5** ⬆️ | 3.0% | 18 | Battery, Rame, Zinco |
-| **real_estate_reit** | 42–52 | 15 | 3 | **5** ⬆️ | 2.0% | 12 | REIT: no SMA200 |
-| **crypto_digital_assets** | 35–52 | 28 | 3 | **5** ⬆️ | 6.0% | 25 | Bitcoin, ETH: volatilità alta |
-| **leva_single_stock** | 45–58 | 28 | 3 | **5** ⬆️ | 4.0% | 20 | 3x Long/Short: hold_max=30gg |
-| **private_equity_buffer** | 40–55 | 15 | 3 | **5** ⬆️ | 2.5% | 15 | Listed PE: conservativo |
-| **monetario_liquidita** | n/a | n/a | 3 | 6 | 0.5% | n/a | XEON: no ADX/RSI |
+| **equity_sviluppati** | 45–58 🔸 | 22 | 3 🔸 | 7 | 4.0% | 6.5% | Cap RSI 55→58, persistenza 5→3 |
+| **mercati_emergenti** | 40–58 🔸 | 22 | 3 | 7 | 5.0% | 8.5% | Cap RSI 52→58 |
+| **settoriali_growth** | 48–60 🔸 | 25 | 3 🔸 | 7 | 5.0% | 10% | Cap RSI 58→60, persistenza 5→3 |
+| **settoriali_difensivi** | 42–50 | 18 | 3 🔸 | 7 | 2.5% | 5% | Persistenza 5→3 |
+| **bond_governativi** | 38–48 | 12 | 3 | 7 | 1.5% | 4% | No ADX obbligatorio |
+| **bond_corp_hy_em** | 42–52 | 15 | 3 | 7 | 2.0% | 5.5% | Corp/HY: RSI stretto |
+| **commodities** | 40–55 | 22 | 3 | 7 | 3.0% | 10% | Spazio residuo 3.5%→2.5% |
+| **oro_metalli_preziosi** | 38–52 | 18 | 3 | 7 | 2.5% | 8% | Spazio residuo 3.0%→2.5% |
+| **metalli_industriali** | 38–50 | 20 | 3 | 7 | 3.0% | 8% | Spazio residuo 3.2%→2.5% |
+| **real_estate_reit** | 42–52 | 15 | 3 | 7 | 2.0% | 7% | REIT: no SMA200 |
+| **crypto_digital_assets** | 35–52 | 28 | 3 | 7 | 6.0% | 25% | Non toccata dallo Step 4 (volatilità alta) |
+| **leva_single_stock** | 45–58 | 28 | 3 | 7 | 4.0% | 20% | Non toccata dallo Step 4; hold_days_max=30 nello YAML ma **non applicato nel codice** |
+| **private_equity_buffer** | 40–55 | 15 | 3 | 7 | 2.5% | 7% | Listed PE: conservativo |
+| **monetario_liquidita** | n/a | n/a | 3 | 7 | 0.5% | n/a | XEON: no ADX/RSI, L0 disabilitato |
 
-**Legenda modifiche recenti (02/07/2026)**:
-- ⬆️ = Alzato oggi per stringere i criteri L1
-  - `min_buy`: 4 → **5** per 8 famiglie (bond, metalli, crypto, PE, REIT, leva) — impedisce ai 4/6 di entrare in L1
-  - `adx_entry`: aumentato per equity (18→22, 15→18) — richiede trend più forte
-  - `days_above_ema`: aumentato a 5 per equity — richiede persistenza maggiore
-- Regime BULL + Prezzo > SMA50: Obbigatori (aggiunto 02/07/2026)
-- **EMA20 Slope ≥ 0.2%**: Filtro STRATO 2 per eliminare trend piatti (risultato: 92 L1 → 10 L1)
-- Prezzo > SMA50: Obbligatorio (aggiunto 02/07/2026 nel codice)
+**Legenda**: 🔸 = modificato nello Step 4 del 04/08/2026. `min_buy` è **7 per tutte le 14 famiglie** dal 22/07/2026 (prima era 4-6 a seconda della famiglia) — zero tolleranza, non esiste più una soglia ridotta. Vedi lo storico completo nel changelog di `etf_monitor_system/CLAUDE.md`.
 
-### Uscita L1 — 6 Regole (in ordine di priorità)
+---
 
-| Priorità | Regola | Trigger | Tipo uscita | Asset class |
-|:---:|--------|---------|:-----------:|-------------|
-| 1 | **F — Kill Switch** | Calo giornaliero ≤ −3% | Totale | Tutte |
-| 2 | **A — Stop Loss** | Prezzo sotto EMA20 da ≥ **3 giorni** consecutivi | Totale | Tutte |
-| 3 | **B — Trailing Stop** | **EMA10 < EMA20** | Totale | Tutte |
-| 4 | **C — Stanchezza** | RSI_prev ≥ 70 AND RSI_oggi < 70 | Totale | Non-bond |
-| 5 | **E — ADX debole** | ADX < **18** AND prezzo < EMA20 | Totale | Equity/Commodity |
-| 6 | **D — Uscita Parziale** | RSI > 78 | **Parziale 90%** | Equity/Commodity |
+### L1 — Uscita: due motori distinti, NON equivalenti (chiarito 04/08/2026)
 
-**Note importanti sulle regole:**
-- **Regola A**: 3 giorni di tolleranza evitano uscite su falsi segnali da singolo giorno di panico
-- **Regola B**: EMA10 < EMA20 è il trailing reattivo — molto più rapido del vecchio EMA20 < SMA50 (death cross tardivo)
-- **Regola C**: solo per non-bond (i bond raramente toccano RSI 70); per bond si usa RSI < rsi_exit_min
-- **Regola E**: condizione congiunta price < EMA20 evita uscite su consolidamenti laterali con ADX naturalmente basso
-- **Regola D**: NON è uscita totale — attiva la logica "piede dentro"
+Il codice ha **due regole di uscita separate**, facili da confondere (è successo durante un'analisi lo stesso giorno):
 
-### Logica "Piede Dentro" — 90% / 10%
+**1) Dashboard — `suggest_level()`** (classifica il livello nell'universo monitorato L0-L3, NON le posizioni comprate davvero):
 
-```
-Segnale D (RSI > 78):
-  → USCITA PARZIALE: vendi 90% della posizione
-  → Acquista ETF monetario (XEON — EUR Overnight €STR) con il 90%
-  → Mantieni 10% ETF equity: rimane in L1, tracciato dalla dashboard
+| Priorità | Regola | Trigger | Asset class |
+|:---:|--------|---------|-------------|
+| 1 | **F — Kill Switch** | Calo giornaliero ≤ −3% | Tutte |
+| 2 | **A — Stop Loss** | Prezzo sotto EMA20 da ≥ 3gg consecutivi | Tutte |
+| 3 | **B — Trailing Stop** | EMA10 < EMA20 | Tutte |
+| 4 | **C — Stanchezza** | RSI_prev ≥ 70 AND RSI_oggi < 70 | Non-bond |
+| 5 | **E — ADX debole** | ADX < 18 AND prezzo < EMA20 | Equity/Commodity |
+| — | Downgrade punteggio/regime | buy_count < 7 OPPURE regime lascia BULL | Tutte |
 
-Segnale F / A / B / C / E:
-  → USCITA TOTALE: vendi il 10% rimanente
-  → Mantieni XEON fino al prossimo segnale di rientro
+**2) Portafoglio reale — `check_l1_exit()`** (le posizioni in `etf_portfolio_entries`, quelle comprate davvero):
 
-Rientro L1 (tutte 6 condizioni vere):
-  → Vendi XEON → rientra 100% su ETF equity
-  → Il 10% già presente non richiede riacquisto
-```
+| Priorità | Regola | Trigger |
+|:---:|--------|---------|
+| 1 | **F — Kill Switch** | Calo giornaliero ≤ −3% |
+| 2 | **SL dinamico** | Prezzo ≤ SL suggerito (EMA20−buffer se profitto<2%, EMA20×0.99 se ≥2%) |
+| 3 | **B — Trailing** | EMA10 < EMA20 |
+| 4 | **C — Stanchezza** | RSI_prev ≥ 70 AND RSI_oggi < 70 (non-bond) |
+| 5 | **SG dinamico** | Prezzo ≥ target dinamico OPPURE RSI(5) sotto soglia con profitto >1% |
+| 6 | **E — ADX debole** | ADX < 18 AND prezzo < EMA20 (equity/commodity) |
 
-**Vantaggi operativi:**
-- Il 90% in XEON guadagna ~3–4% annuo (€STR) mentre si aspetta il rientro
-- Il 10% rimasto è il "sensore": se il trend riprende si vede subito senza costi di riacquisto
-- Tassazione solo sulla parte venduta (90%)
-- Dashboard continua a tracciare l'ETF con dati reali anche durante la fase monetaria
+**Non ha** la Regola A né il downgrade per punteggio/regime — usa lo stop loss/stop gain dinamico al loro posto. **Nessuna delle due liste contiene un "timeout" per tempo di possesso**: `hold_days_max` (30gg, solo `leva_single_stock`) è nello YAML ma non è mai controllato nel codice, è solo mostrato in dashboard.
+
+> **Fix 04/08/2026**: prima di oggi la Regola E non scattava **mai**, in nessuno dei due motori (bug: confronto contro nomi di famiglia legacy mai coincidenti coi nomi YAML attuali). Il target dello Stop Gain dinamico era di fatto **statico** (nessun decadimento temporale/slope EMA20), perché i dati necessari non venivano mai passati alla funzione. Entrambi corretti — vedi commit `6867093` in `etf_monitor_system`.
+
+**3) Come opera davvero l'utente (precisato 04/08/2026) — questa è la regola che conta per calcolare rendimenti reali:**
+
+Il sistema **non esegue mai ordini in automatico**. Flusso reale: l'ETF entra in L1 → acquisto manuale → ogni giorno il monitor ricalcola SL e TP e li manda via email → l'utente aggiorna manualmente questi due ordini su Directa → la posizione esce **solo** quando il prezzo tocca SL o TP a mercato. **B, C, E, F non sono vendite reali** — fanno solo uscire l'ETF dalla lista L1 in dashboard (non è più un candidato per un *nuovo* acquisto), non toccano le posizioni aperte. Il kill switch non è un ordine a sé: se il crollo buca lo SL già impostato esce da lì, altrimenti niente.
+
+**Per calcolare rendimenti reali**: entrata 7/7+fondamenta, uscita = SL o TP (`calculate_sl_suggerito_l1`/`calculate_sg_suggerito_l1`), ricalcolati ogni giorno, il primo toccato. Più €5 Directa acquisto + €5 vendita, tassazione 26% flat sulle plusvalenze.
+
+**Backtest 12 mesi (2025-08-01→oggi, 7 famiglie equity-core)**: la prima versione (con tutte e 6 le regole di `check_l1_exit()` come se fossero vendite automatiche) è **superata** dal chiarimento sopra — va rifatta usando solo SL/TP giornalieri. Vedi `backtest_l1.py` per la versione aggiornata.
 
 ### L0 — Deep Recovery (ETF in forte calo)
 
