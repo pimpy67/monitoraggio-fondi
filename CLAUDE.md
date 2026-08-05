@@ -286,9 +286,9 @@ Il codice ha **due regole di uscita separate**, facili da confondere (è success
 
 Il sistema **non esegue mai ordini in automatico**. Flusso reale: l'ETF entra in L1 → acquisto manuale → ogni giorno il monitor ricalcola SL e TP e li manda via email → l'utente aggiorna manualmente questi due ordini su Directa → la posizione esce **solo** quando il prezzo tocca SL o TP a mercato. **B, C, E, F non sono vendite reali** — fanno solo uscire l'ETF dalla lista L1 in dashboard (non è più un candidato per un *nuovo* acquisto), non toccano le posizioni aperte. Il kill switch non è un ordine a sé: se il crollo buca lo SL già impostato esce da lì, altrimenti niente.
 
-**Per calcolare rendimenti reali**: entrata 7/7+fondamenta, uscita = SL o TP (`calculate_sl_suggerito_l1`/`calculate_sg_suggerito_l1`), ricalcolati ogni giorno, il primo toccato. Più €5 Directa acquisto + €5 vendita, tassazione 26% flat sulle plusvalenze.
+**Per calcolare rendimenti reali**: entrata 7/7+fondamenta, uscita = SL (`calculate_sl_suggerito_l1`) o TP (`calculate_stop_gain_dynamic` — l'unica funzione TP rimasta, `calculate_sg_suggerito_l1` e `check_l1_exit()` sono state rimosse il 2026-08-05 perché erano dead code), ricalcolati ogni giorno, il primo toccato. Più €5 Directa acquisto + €5 vendita, tassazione 26% flat sulle plusvalenze.
 
-**Backtest 12 mesi (2025-08-01→oggi, 7 famiglie equity-core)**: la prima versione (con tutte e 6 le regole di `check_l1_exit()` come se fossero vendite automatiche) è **superata** dal chiarimento sopra — va rifatta usando solo SL/TP giornalieri. Vedi `backtest_l1.py` per la versione aggiornata.
+**Backtest 12 mesi (2025-08-01→2026-08-04, 13 famiglie, modello reale sopra)**: sistema **profittevole al netto di costi/tasse** sia a `min_buy_count=7` (+1.572€ su 10.000€/trade, 3 trade, 100% win rate — campione troppo piccolo per essere conclusivo) sia a `min_buy_count=6` (+14.451€ su 10.000€/trade, 234 trade, 52.9% win rate, asimmetria -4.3%/+5.1% SL/TP). Dettagli e roadmap completa in `etf_monitor_system/CLAUDE.md` → sezione "Stato Attuale & Roadmap L1".
 
 ### L0 — Deep Recovery (ETF in forte calo)
 
