@@ -292,17 +292,31 @@ Il sistema **non esegue mai ordini in automatico**. Flusso reale: l'ETF entra in
 
 ### L0 — Deep Recovery (ETF in forte calo)
 
-**Entrata** — 4 condizioni tutte obbligatorie:
+**Entrata** — tre percorsi (FAST/SLOW hanno priorità, altrimenti PRAGMATIC a 4 condizioni).
+Fix 2026-08-05: FAST/SLOW ora richiedono anche conferma di recupero (RSI risalito o
+prezzo che riconquista EMA20/50) prima di entrare — prima entravano al solo rilevamento
+del crollo, senza prova che l'inversione fosse davvero iniziata (causa sospetta dei "falsi
+L0" che continuavano a scendere). PRAGMATIC — 4 condizioni tutte obbligatorie:
 1. Prezzo almeno `l0_drawdown`% sotto il picco storico (vedi profili: 8–20% per asset class)
 2. RSI < `l0_rsi_max` (ipervenduto, vedi profili)
 3. Divergenza rialzista (prezzo fa minimo più basso, RSI fa minimo più alto)
 4. Segnale recupero: RSI risalito > 32 OPPURE micro-breakout ≥ 0.3% su 5gg
 
-**Uscita L0** — basta 1:
-- γ: Prezzo > EMA20 → promozione a L2
-- β: RSI < 25 dopo ingresso → trappola ribassista
-- α: Prezzo < panic_low (min 30gg al momento ingresso) → stop assoluto
-- ε: Nessun recupero dopo 30gg → gestito in monitor.py
+**Uscita L0 — dashboard/universo** (classificazione, non le posizioni reali):
+- β: RSI < 25 dopo ingresso → trappola ribassista, esce da L0
+- α: Prezzo < trigger_low_price (minimo al momento dell'ingresso) → invalidazione
+- ~~γ (prezzo > EMA20 → promozione a L2)~~ **rimossa 2026-08-05**: su richiesta esplicita,
+  un ETF in L0 resta L0 finché non perde davvero i requisiti (β o α), non solo perché il
+  prezzo supera l'EMA20 — quel segnale serve già a CONFERMARE l'ingresso FAST/SLOW, non ha
+  senso anche come uscita. L0 punta a inversioni di medio-lungo periodo.
+- ε: Nessun recupero dopo 30gg → documentato, mai implementato
+
+**Portafoglio reale L0** (posizioni comprate davvero, stessa filosofia "no automazione" di
+L1): uscita solo su tocco di SL trailing (`calculate_sl_suggerito_l0`) o TP fisso di
+famiglia (`calculate_tp_suggerito_l0`, **nuovo 2026-08-05** — prima L0 non aveva alcun
+target di uscita al rialzo). `check_l0_exit()` rimossa (dead code, stessa contraddizione
+già risolta su L1: chiudeva le posizioni reali su kill switch/bear trap/timeout, non solo
+su SL/TP). Dettagli completi in `etf_monitor_system/CLAUDE.md`.
 
 ### Kill Switch ETF
 Se variazione giornaliera ≤ −3%: nuovi ingressi L0 e L1 bloccati; uscite sempre operative.
