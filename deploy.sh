@@ -30,7 +30,7 @@ ssh -i "$SSH_KEY" "$VPS" "
 
 # 3. Rebuild immagine Docker e ricrea il container
 echo ""
-echo "=== [3/3] Build + deploy container ==="
+echo "=== [3/4] Build + deploy container ==="
 ssh -i "$SSH_KEY" "$VPS" "
     cd $VPS_REPO
     docker compose -p fund-monitor build app
@@ -41,8 +41,16 @@ ssh -i "$SSH_KEY" "$VPS" "
 "
 
 echo ""
-echo "=== [4/4] Trigger monitor (aggiorna dashboard_data.json) ==="
+echo "=== [4/5] Trigger monitor (aggiorna dashboard_data.json) ==="
 ssh -i "$SSH_KEY" "$VPS" "until curl -sf http://localhost:5000/api/health > /dev/null 2>&1; do sleep 2; done && curl -s -X POST http://localhost:5000/api/trigger-update"
+
+# 5. Sincronizza file xlsx dal VPS al Mac locale
+echo ""
+echo "=== [5/5] Sincronizza Excel locale dal VPS ==="
+scp -i "$SSH_KEY" "$VPS:$VPS_REPO/fondi_monitoraggio.xlsx" "./fondi_monitoraggio.xlsx" 2>/dev/null && \
+    echo "✓ fondi_monitoraggio.xlsx sincronizzato" || \
+    echo "⚠ Sincronizzazione Excel non riuscita (ma deploy è ok)"
+
 echo ""
 echo "Deploy completato. Dashboard: https://fondi.andreapavan.tech"
 echo "Il monitor sta girando in background (~10 min). Poi ricarica la dashboard."

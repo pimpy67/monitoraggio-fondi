@@ -209,7 +209,10 @@ Tutti gli ETF partono da qui. Nessuna condizione richiesta.
 > **Condizione 6 (MACD)**: blocca ingressi quando EMA20 è ancora positiva per inerzia ma il momentum è già esaurito. Il secondo ramo (dist < 2%) cattura i buy-the-dip vicini all'EMA20 anche con MACD in leggero plateau.
 > **Condizione 7 (Spazio Residuo, aggiunta 22/07/2026)**: evita di comprare a ridosso di una resistenza, senza margine di guadagno prima del prossimo ostacolo tecnico.
 
-> **Blocco ingresso L1**: `min_buy_count: 7` per **tutte** le 14 famiglie, zero tolleranza — se anche una sola delle 7 è falsa, ingresso bloccato (non esiste più una soglia "5/6" o "6/7"). Kill Switch attivo (calo giornaliero ≤ −3%) blocca comunque anche a 7/7.
+> **Blocco ingresso L1**: `min_buy_count: 7` per **8 famiglie** (tutte tranne le 6 sotto), zero tolleranza sulle 7 condizioni — se anche una sola è falsa, ingresso bloccato (non esiste più una soglia "5/6" o "6/7"). Kill Switch attivo (calo giornaliero ≤ −3%) blocca comunque anche a 7/7.
+> **Famiglie con `min_buy_count: 8`** (irraggiungibile su un gate a 7 condizioni, quindi L1 di fatto disattivato): `leva_single_stock` (storico) + **dal 2026-08-24** `bond_governativi`, `bond_corp_hy_em`, `settoriali_difensivi`, `real_estate_reit`, `private_equity_buffer` — nei 3 anni di backtest si erano attivate solo 4 volte in totale, tutte e 4 in perdita (0% win rate). Non è un problema di soglie: il trend-following (EMA/SMA + persistenza + MACD) non si adatta a strumenti a bassa volatilità come i bond. Restano tracciate normalmente in L0/L2/L3/dashboard — solo la promozione a L1 è bloccata. Dettagli in `etf_monitor_system/CLAUDE.md` → sezione "Survey completo 14 famiglie" e `memory/etf_family_viability_survey_2026_08_24.md`.
+>
+> ✅ **`smart_6_macd` PROMOSSO IN PRODUZIONE 2026-08-24** (deroga esplicita al lockdown, vedi `etf_monitor_system/CLAUDE.md` → "CANDIDATE_MODEL_B_20260807 — PROMOSSO"): per le **5 famiglie `core`** (`equity_sviluppati`, `mercati_emergenti`, `settoriali_growth`, `oro_metalli_preziosi`, `metalli_industriali`) `use_smart_6_7_macd: true` — un ingresso a **6/7 con MACD sempre tra le condizioni vere** ora conta come L1 valido, non serve più il 7/7 pieno per queste 5. Le altre 9 famiglie restano a 7/7 puro (o bloccate a 8/8). Bundle completo: `mm200_distance_max` assoluto al 7,0% e `adx_entry` = baseline−4 per tutte e 5 (vedi tabella sotto), `l1_stop_gain_dynamic.target_max_pct` al 15% (sostituisce il target per-famiglia). Rischio noto e accettato: `oro_metalli_preziosi`/`mercati_emergenti` erano già state segnalate deboli lo stesso giorno — da rivalutare al prossimo checkpoint.
 
 ### FONDAMENTA IRRINUNCIABILI (aggiornate 04/08/2026)
 
@@ -233,22 +236,22 @@ Tutti gli ETF partono da qui. Nessuna condizione richiesta.
 
 | Famiglia | RSI Low–High | ADX entry | days_ema | min_buy | ema_dist_max | l0_dd % | Note |
 |----------|:---:|:---:|:---:|:---:|:---:|:---:|------|
-| **equity_sviluppati** | 45–58 🔸 | 22 | 3 🔸 | 7 | 4.0% | 6.5% | Cap RSI 55→58, persistenza 5→3 |
-| **mercati_emergenti** | 40–58 🔸 | 22 | 3 | 7 | 5.0% | 8.5% | Cap RSI 52→58 |
-| **settoriali_growth** | 48–60 🔸 | 25 | 3 🔸 | 7 | 5.0% | 10% | Cap RSI 58→60, persistenza 5→3 |
-| **settoriali_difensivi** | 42–50 | 18 | 3 🔸 | 7 | 2.5% | 5% | Persistenza 5→3 |
-| **bond_governativi** | 38–48 | 12 | 3 | 7 | 1.5% | 4% | No ADX obbligatorio |
-| **bond_corp_hy_em** | 42–52 | 15 | 3 | 7 | 2.0% | 5.5% | Corp/HY: RSI stretto |
+| **equity_sviluppati** | 45–58 🔸 | ~~22~~ **18** 🟣 | 3 🔸 | 7 (o 6+MACD 🟣) | 4.0% | 6.5% | Cap RSI 55→58, persistenza 5→3; smart_6_macd live 24/08 |
+| **mercati_emergenti** | 40–58 🔸 | ~~22~~ **18** 🟣 | 3 | 7 (o 6+MACD 🟣) | 5.0% | 8.5% | Cap RSI 52→58; smart_6_macd live 24/08 (famiglia già segnalata debole) |
+| **settoriali_growth** | 48–60 🔸 | ~~25~~ **21** 🟣 | 3 🔸 | 7 (o 6+MACD 🟣) | 5.0% | 10% | Cap RSI 58→60, persistenza 5→3; smart_6_macd live 24/08 |
+| **settoriali_difensivi** | 42–50 | 18 | 3 🔸 | **8** ⛔ | 2.5% | 5% | Persistenza 5→3; L1 bloccato 24/08 |
+| **bond_governativi** | 38–48 | 12 | 3 | **8** ⛔ | 1.5% | 4% | No ADX obbligatorio; L1 bloccato 24/08 |
+| **bond_corp_hy_em** | 42–52 | 15 | 3 | **8** ⛔ | 2.0% | 5.5% | Corp/HY: RSI stretto; L1 bloccato 24/08 |
 | **commodities** | 40–55 | 22 | 3 | 7 | 3.0% | 10% | Spazio residuo 3.5%→2.5% |
-| **oro_metalli_preziosi** | 38–52 | 18 | 3 | 7 | 2.5% | 8% | Spazio residuo 3.0%→2.5% |
-| **metalli_industriali** | 38–50 | 20 | 3 | 7 | 3.0% | 8% | Spazio residuo 3.2%→2.5% |
-| **real_estate_reit** | 42–52 | 15 | 3 | 7 | 2.0% | 7% | REIT: no SMA200 |
+| **oro_metalli_preziosi** | 38–52 | ~~18~~ **14** 🟣 | 3 | 7 (o 6+MACD 🟣) | 2.5% | 8% | Spazio residuo 3.0%→2.5%; L1 morto su native_7, smart_6_macd live 24/08 (famiglia già segnalata debole); in prova su L0 |
+| **metalli_industriali** | 38–50 | ~~20~~ **16** 🟣 | 3 | 7 (o 6+MACD 🟣) | 3.0% | 8% | Spazio residuo 3.2%→2.5%; smart_6_macd live 24/08; in prova su L0 |
+| **real_estate_reit** | 42–52 | 15 | 3 | **8** ⛔ | 2.0% | 7% | REIT: no SMA200; L1 bloccato 24/08 |
 | **crypto_digital_assets** | 35–52 | 28 | 3 | 7 | 6.0% | 25% | Non toccata dallo Step 4 (volatilità alta) |
-| **leva_single_stock** | 45–58 | 28 | 3 | 7 | 4.0% | 20% | Non toccata dallo Step 4; hold_days_max=30 nello YAML ma **non applicato nel codice** |
-| **private_equity_buffer** | 40–55 | 15 | 3 | 7 | 2.5% | 7% | Listed PE: conservativo |
+| **leva_single_stock** | 45–58 | 28 | 3 | **8** ⛔ | 4.0% | 20% | Non toccata dallo Step 4; hold_days_max=30 nello YAML ma **non applicato nel codice**; L1 bloccato (storico) |
+| **private_equity_buffer** | 40–55 | 15 | 3 | **8** ⛔ | 2.5% | 7% | Listed PE: conservativo; L1 bloccato 24/08 |
 | **monetario_liquidita** | n/a | n/a | 3 | 7 | 0.5% | n/a | XEON: no ADX/RSI, L0 disabilitato |
 
-**Legenda**: 🔸 = modificato nello Step 4 del 04/08/2026. `min_buy` è **7 per tutte le 14 famiglie** dal 22/07/2026 (prima era 4-6 a seconda della famiglia) — zero tolleranza, non esiste più una soglia ridotta. Vedi lo storico completo nel changelog di `etf_monitor_system/CLAUDE.md`.
+**Legenda**: 🔸 = modificato nello Step 4 del 04/08/2026. ⛔ = `min_buy_count: 8`, irraggiungibile su un gate a 7 condizioni → L1 di fatto disattivato per quella famiglia (resta tracciata su L0/L2/L3). 🟣 = bundle `CANDIDATE_MODEL_B_20260807` promosso in produzione 2026-08-24 (`use_smart_6_7_macd: true`, ADX abbassato di 4 punti rispetto al valore storico, più — non in tabella — `mm200_distance_max` portato a 7,0% assoluto e `l1_stop_gain_dynamic.target_max_pct` al 15% per tutte e 5 le famiglie marcate). Le altre 8 famiglie restano a `min_buy_count: 7` dal 22/07/2026 (prima era 4-6 a seconda della famiglia). Vedi lo storico completo nel changelog di `etf_monitor_system/CLAUDE.md`.
 
 ---
 
